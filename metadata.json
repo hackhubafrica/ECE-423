@@ -1,0 +1,8 @@
+{
+  "name": "ECE 423 Lab — Digital Communication Systems",
+  "description": "Interactive study workspace, signal simulation labs, step-by-step numerical solvers, and timed CAT/exam quizzes for ECE 423 Digital Communication Systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
