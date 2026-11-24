@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Circle,
   Clock,
+  Layers,
   Sliders,
 } from 'lucide-react';
 import {
@@ -27,6 +28,7 @@ import {
   StudyProgressState,
   SyllabusModule,
 } from '../types/ece423';
+import { FlashcardDeck, FlashcardFocusRequest } from './FlashcardDeck';
 import { WeakTopicsSidebar } from './WeakTopicsSidebar';
 
 interface StudySprintViewProps {
@@ -51,6 +53,8 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
   onResolveSolverAttempt,
 }) => {
   const [horizon, setHorizon] = useState<'tonight' | 'exam'>('tonight');
+  const [sprintMode, setSprintMode] = useState<'roadmap' | 'flashcards'>('roadmap');
+  const [flashcardFocus, setFlashcardFocus] = useState<FlashcardFocusRequest | null>(null);
   const [selectedModule, setSelectedModule] = useState<'all' | SyllabusModule>('all');
   const [comparisonTab, setComparisonTab] = useState<'waveform' | 'nonwaveform' | 'modulation'>('waveform');
   const [highlightedTopicId, setHighlightedTopicId] = useState<string | null>(null);
@@ -60,7 +64,21 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
     setExpandedTheoryIds((prev) => ({ ...prev, [topicId]: !prev[topicId] }));
   };
 
+  const handleOpenFlashcards = (syllabusTopicId?: string) => {
+    setSprintMode('flashcards');
+    if (syllabusTopicId) {
+      setFlashcardFocus({ syllabusTopicId, nonce: Date.now() });
+    }
+    window.setTimeout(() => {
+      const el = document.getElementById('study-sprint-workspace');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 30);
+  };
+
   const handleFocusSyllabusTopic = (syllabusTopicId: string) => {
+    setSprintMode('roadmap');
     setSelectedModule('all');
     setHighlightedTopicId(syllabusTopicId);
     window.setTimeout(() => {
@@ -136,6 +154,14 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
                 <Calculator className="h-4 w-4 text-sky-600" />
                 <span>Step-by-Step Calculators</span>
               </button>
+              <button
+                type="button"
+                onClick={() => handleOpenFlashcards()}
+                className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
+              >
+                <Layers className="h-4 w-4 text-sky-600" />
+                <span>Flashcard Drill</span>
+              </button>
             </div>
           </div>
 
@@ -177,8 +203,56 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
       </section>
 
       {/* Two-Column Study Body + Sticky Weak Topics Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-8 space-y-10 min-w-0">
+      <div
+        id="study-sprint-workspace"
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
+      >
+        <div className="lg:col-span-8 space-y-8 min-w-0">
+          {/* Study Mode Switcher: Roadmap & Checklist vs Flashcard Mode */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setSprintMode('roadmap')}
+                className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                  sprintMode === 'roadmap'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Roadmap &amp; Syllabus Checklist
+              </button>
+              <button
+                type="button"
+                onClick={() => setSprintMode('flashcards')}
+                className={`cursor-pointer inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                  sprintMode === 'flashcards'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5 text-sky-600" />
+                <span>Flashcard Mode</span>
+              </button>
+            </div>
+            <span className="text-xs text-slate-500">
+              {sprintMode === 'flashcards'
+                ? 'Active recall: flip formulas to practical engineering applications'
+                : 'Track syllabus progress and launch labs or calculators'}
+            </span>
+          </div>
+
+          {sprintMode === 'flashcards' ? (
+            <FlashcardDeck
+              progress={progress}
+              focusRequest={flashcardFocus}
+              onToggleTopic={onToggleTopic}
+              onOpenLab={onOpenLab}
+              onOpenCalculator={onOpenCalculator}
+              onStartCatQuiz={onStartCatQuiz}
+            />
+          ) : (
+            <div className="space-y-10">
           {/* Section 2: Learning Strategy & Dual-Horizon Action Plan */}
           <section className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -337,7 +411,7 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
                       className="cursor-pointer mt-0.5 text-slate-400 hover:text-sky-600 shrink-0 focus-visible:outline-2 focus-visible:outline-sky-600"
                     >
                       {isDone ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <CheckCircle2 className="animate-master-pop h-5 w-5 text-emerald-600" />
                       ) : (
                         <Circle className="h-5 w-5" />
                       )}
@@ -590,6 +664,8 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
           )}
         </div>
       </section>
+            </div>
+          )}
         </div>
 
         {/* Right Sidebar: Weak Topics Diagnostic & Review */}
@@ -599,6 +675,7 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
             onOpenLab={onOpenLab}
             onOpenCalculator={onOpenCalculator}
             onOpenTheory={onOpenTheory}
+            onOpenFlashcards={handleOpenFlashcards}
             onStartCatQuiz={onStartCatQuiz}
             onFocusSyllabusTopic={handleFocusSyllabusTopic}
             onResolveQuizTopic={onResolveQuizTopic}
@@ -609,3 +686,4 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
     </div>
   );
 };
+

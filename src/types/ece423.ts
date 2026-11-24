@@ -8,6 +8,7 @@ export enum WorkspaceTab {
   SPRINT = 'sprint',
   THEORY = 'theory',
   LABS = 'labs',
+  BENCH = 'bench',
   SOLVER = 'solver',
   QUIZ = 'quiz',
 }
@@ -137,6 +138,22 @@ export interface EssayPrompt {
   recommendedLab?: LabType;
 }
 
+export interface FlashcardItem {
+  id: string;
+  syllabusTopicId: string;
+  module: SyllabusModule;
+  title: string;
+  catPriority: 'Critical' | 'High' | 'Exam Core';
+  formulaDisplay: string;
+  variableLegend: string[];
+  promptQuestion: string;
+  practicalApplication: string;
+  systemConsequence: string;
+  catTrap: string;
+  recommendedLab?: LabType;
+  recommendedCalc?: string;
+}
+
 export interface StudyProgressState {
   completedTopics: string[];
   masteredExamples: string[];
@@ -145,3 +162,4 @@ export interface StudyProgressState {
   failedSolverAttempts: FailedSolverAttempt[];
   resolvedWeakQuizIds: string[];
 }
+

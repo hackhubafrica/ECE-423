@@ -532,11 +532,18 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
 
     return (
       <div className="space-y-6">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+        <div className="animate-toast-in rounded-xl border border-slate-200 bg-white p-6 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
-              <div className="text-xs font-medium text-slate-500">Assessment Completed</div>
-              <h1 className="text-2xl font-bold text-slate-950 mt-0.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                <CheckCircle2 className="animate-master-pop h-4 w-4 shrink-0" />
+                <span>
+                  {resultsStats.pct >= 75
+                    ? 'Assessment Completed · Strong CAT Readiness'
+                    : 'Assessment Completed · Review Missed Concepts Below'}
+                </span>
+              </div>
+              <h1 className="text-2xl font-bold text-slate-950 mt-1 tabular-nums">
                 Score: {resultsStats.correct} / {resultsStats.total} ({resultsStats.pct}%)
               </h1>
             </div>

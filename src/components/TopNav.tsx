@@ -11,6 +11,7 @@ const NAV_ITEMS: { id: WorkspaceTab; label: string }[] = [
   { id: WorkspaceTab.SPRINT, label: 'Study Sprint' },
   { id: WorkspaceTab.THEORY, label: 'Theory & History' },
   { id: WorkspaceTab.LABS, label: 'Signal Labs' },
+  { id: WorkspaceTab.BENCH, label: 'Practical Bench' },
   { id: WorkspaceTab.SOLVER, label: 'Solver & Formulas' },
   { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },
 ];
@@ -22,7 +23,7 @@ export const TopNav: React.FC<TopNavProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-8 px-6 py-3.5">
+      <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-6 px-6 py-3.5">
         {/* Zone 1: Single-element wordmark */}
         <button
           type="button"
@@ -32,10 +33,10 @@ export const TopNav: React.FC<TopNavProps> = ({
           ECE 423 Lab
         </button>
 
-        {/* Zone 2: 4 single-line navigation links */}
+        {/* Zone 2: Single-line navigation links */}
         <nav
           aria-label="Primary workspace navigation"
-          className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
+          className="hidden md:flex items-center gap-5 lg:gap-6 text-sm font-medium text-slate-600"
         >
           {NAV_ITEMS.map((item) => {
             const isActive = activeTab === item.id;

@@ -328,7 +328,7 @@ export const TheoryHistoryView: React.FC<TheoryHistoryViewProps> = ({
                       className="cursor-pointer mt-0.5 text-slate-400 hover:text-emerald-600 shrink-0"
                     >
                       {isMastered ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                        <CheckCircle2 className="animate-master-pop h-5 w-5 text-emerald-600" />
                       ) : (
                         <Circle className="h-5 w-5" />
                       )}

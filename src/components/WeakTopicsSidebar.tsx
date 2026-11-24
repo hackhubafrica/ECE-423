@@ -6,214 +6,39 @@ import {
   Calculator,
   Check,
   CheckCircle2,
+  Layers,
   PlayCircle,
   Sliders,
 } from 'lucide-react';
 import { MODULE_META } from '../data/syllabusData';
-import { QUIZ_QUESTIONS } from '../data/quizQuestions';
 import {
   LabType,
   StudyProgressState,
   SyllabusModule,
 } from '../types/ece423';
+import {
+  computeWeakTopicDiagnostics,
+  SOLVER_TO_SYLLABUS_ID,
+} from '../utils/weakTopics';
 
 interface WeakTopicsSidebarProps {
   progress: StudyProgressState;
   onOpenLab: (lab: LabType) => void;
   onOpenCalculator: (calcId?: string) => void;
   onOpenTheory?: (subTab?: 'principles' | 'timeline' | 'essays') => void;
+  onOpenFlashcards?: (syllabusTopicId?: string) => void;
   onStartCatQuiz: () => void;
   onFocusSyllabusTopic: (syllabusTopicId: string) => void;
   onResolveQuizTopic: (questionIds: string[]) => void;
   onResolveSolverAttempt: (id: string) => void;
 }
 
-interface AggregatedWeakQuizTopic {
-  topicKey: string;
-  questionIds: string[];
-  topic: string;
-  module: SyllabusModule;
-  missCount: number;
-  isRecurring: boolean;
-  formulaHint: string;
-  syllabusTopicId: string;
-  recommendedLab?: LabType;
-  recommendedCalc?: string;
-}
-
-const TOPIC_TO_PRACTICE: Record<
-  string,
-  { syllabusTopicId: string; lab?: LabType; calc?: string }
-> = {
-  'Sampling Theorem': {
-    syllabusTopicId: 'pcm-nyquist',
-    lab: LabType.SAMPLING_PCM,
-    calc: 'pcm_snr',
-  },
-  'Uniform Quantization': {
-    syllabusTopicId: 'pcm-quantization',
-    lab: LabType.SAMPLING_PCM,
-    calc: 'pcm_snr',
-  },
-  'Quantization Noise': {
-    syllabusTopicId: 'pcm-quantization',
-    lab: LabType.SAMPLING_PCM,
-    calc: 'pcm_snr',
-  },
-  'PCM Bit Rate': {
-    syllabusTopicId: 'pcm-quantization',
-    lab: LabType.SAMPLING_PCM,
-    calc: 'pcm_snr',
-  },
-  'Overall PCM SNR & Threshold': {
-    syllabusTopicId: 'pcm-noise-threshold',
-    calc: 'pcm_snr',
-  },
-  'TDM Multiplexing': {
-    syllabusTopicId: 'pcm-tdm',
-    calc: 'tdm_frame',
-  },
-  Synchronization: {
-    syllabusTopicId: 'pcm-tdm',
-    lab: LabType.LINE_CODING,
-    calc: 'tdm_frame',
-  },
-  Companding: {
-    syllabusTopicId: 'pcm-companding',
-    lab: LabType.COMPANDING,
-    calc: 'companding',
-  },
-  'Line Coding': {
-    syllabusTopicId: 'pcm-line-coding',
-    lab: LabType.LINE_CODING,
-  },
-  "Shannon's Law": {
-    syllabusTopicId: 'comp-shannon',
-    calc: 'shannon',
-  },
-  'Shannon Limit': {
-    syllabusTopicId: 'comp-shannon',
-    calc: 'shannon',
-  },
-  'Delta Modulation': {
-    syllabusTopicId: 'comp-dm',
-    lab: LabType.DELTA_MOD,
-    calc: 'delta_mod',
-  },
-  'Delta Modulation Numerical': {
-    syllabusTopicId: 'comp-dm',
-    lab: LabType.DELTA_MOD,
-    calc: 'delta_mod',
-  },
-  'DPCM & Prediction': {
-    syllabusTopicId: 'comp-dpcm',
-    calc: 'examples',
-  },
-  'ADPCM vs DM': {
-    syllabusTopicId: 'comp-adaptive',
-    lab: LabType.DELTA_MOD,
-    calc: 'examples',
-  },
-  'Non-Waveform Coding': {
-    syllabusTopicId: 'comp-nonwaveform',
-    calc: 'examples',
-  },
-  'CELP Speech Coding': {
-    syllabusTopicId: 'comp-nonwaveform',
-    calc: 'examples',
-  },
-  'JPEG Image Coding': {
-    syllabusTopicId: 'comp-nonwaveform',
-    calc: 'examples',
-  },
-  'MPEG Video Coding': {
-    syllabusTopicId: 'comp-nonwaveform',
-    calc: 'examples',
-  },
-  'Power Efficiency & BER': {
-    syllabusTopicId: 'mod-binary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'Spectral Efficiency': {
-    syllabusTopicId: 'mod-mary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'QPSK vs BPSK': {
-    syllabusTopicId: 'mod-mary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'DPSK Detection': {
-    syllabusTopicId: 'mod-binary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'MSK Properties': {
-    syllabusTopicId: 'mod-mary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'Matched Filter Receiver': {
-    syllabusTopicId: 'mod-receivers',
-    calc: 'examples',
-  },
-  'ASK vs BPSK Distance': {
-    syllabusTopicId: 'mod-binary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'BFSK Orthogonality': {
-    syllabusTopicId: 'mod-binary',
-    lab: LabType.DIGITAL_MOD,
-    calc: 'modulation',
-  },
-  'Constellation & Gray Coding': {
-    syllabusTopicId: 'mod-mary',
-    lab: LabType.DIGITAL_MOD,
-  },
-  'Receiver Synchronization': {
-    syllabusTopicId: 'mod-receivers',
-    lab: LabType.DIGITAL_MOD,
-  },
-};
-
-const SOLVER_TO_SYLLABUS_ID: Record<string, string> = {
-  'calc:pcm_snr': 'pcm-noise-threshold',
-  'calc:tdm_frame': 'pcm-tdm',
-  'calc:companding': 'pcm-companding',
-  'calc:shannon': 'comp-shannon',
-  'calc:delta_mod': 'comp-dm',
-  'calc:modulation': 'mod-metrics',
-  'ex-pcm-1': 'pcm-quantization',
-  'ex-pcm-2': 'pcm-tdm',
-  'ex-pcm-3': 'pcm-companding',
-  'ex-pcm-4': 'pcm-noise-threshold',
-  'ex-comp-1': 'comp-shannon',
-  'ex-comp-2': 'comp-dm',
-  'ex-comp-3': 'comp-dpcm',
-  'ex-comp-4': 'comp-nonwaveform',
-  'ex-mod-1': 'mod-mary',
-  'ex-mod-2': 'mod-binary',
-  'ex-mod-3': 'mod-mary',
-  'ex-mod-4': 'mod-receivers',
-  'essay-pcm-1': 'pcm-noise-threshold',
-  'essay-pcm-2': 'pcm-line-coding',
-  'essay-pcm-3': 'pcm-tdm',
-  'essay-comp-1': 'comp-dm',
-  'essay-comp-2': 'comp-nonwaveform',
-  'essay-comp-3': 'comp-nonwaveform',
-  'essay-mod-1': 'mod-receivers',
-  'essay-mod-2': 'mod-metrics',
-  'essay-mod-3': 'mod-mary',
-};
-
 export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
   progress,
   onOpenLab,
   onOpenCalculator,
   onOpenTheory,
+  onOpenFlashcards,
   onStartCatQuiz,
   onFocusSyllabusTopic,
   onResolveQuizTopic,
@@ -237,76 +62,10 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
     return totals;
   }, [progress.quizAttempts]);
 
-  // Aggregate missed quiz questions by topic across attempts
-  const weakQuizTopics = useMemo<AggregatedWeakQuizTopic[]>(() => {
-    const questionMissMap = new Map<
-      string,
-      { questionId: string; topic: string; module: SyllabusModule; count: number }
-    >();
-
-    // Walk chronologically so newer correct answers clear that specific question
-    const chronological = [...progress.quizAttempts].reverse();
-    chronological.forEach((att) => {
-      att.correctQuestionIds?.forEach((qid) => {
-        questionMissMap.delete(qid);
-      });
-      att.missedTopics?.forEach((m) => {
-        if (progress.resolvedWeakQuizIds.includes(m.questionId)) return;
-        const prev = questionMissMap.get(m.questionId);
-        questionMissMap.set(m.questionId, {
-          questionId: m.questionId,
-          topic: m.topic,
-          module: m.module,
-          count: (prev?.count || 0) + 1,
-        });
-      });
-    });
-
-    // Aggregate unresolved missed questions by (module + topic)
-    const topicGroups = new Map<string, AggregatedWeakQuizTopic>();
-    questionMissMap.forEach((entry) => {
-      const topicKey = `${entry.module}:${entry.topic}`;
-      const existing = topicGroups.get(topicKey);
-      const qMeta = QUIZ_QUESTIONS.find((q) => q.id === entry.questionId);
-      const links = TOPIC_TO_PRACTICE[entry.topic] || {
-        syllabusTopicId:
-          entry.module === SyllabusModule.PCM
-            ? 'pcm-nyquist'
-            : entry.module === SyllabusModule.COMPRESSION
-            ? 'comp-shannon'
-            : 'mod-metrics',
-      };
-
-      if (existing) {
-        existing.questionIds.push(entry.questionId);
-        existing.missCount += entry.count;
-        existing.isRecurring = existing.missCount >= 2;
-      } else {
-        topicGroups.set(topicKey, {
-          topicKey,
-          questionIds: [entry.questionId],
-          topic: entry.topic,
-          module: entry.module,
-          missCount: entry.count,
-          isRecurring: entry.count >= 2,
-          formulaHint: qMeta?.formulaHint || '',
-          syllabusTopicId: links.syllabusTopicId,
-          recommendedLab: links.lab,
-          recommendedCalc: links.calc,
-        });
-      }
-    });
-
-    return Array.from(topicGroups.values()).sort(
-      (a, b) => b.missCount - a.missCount
-    );
-  }, [progress.quizAttempts, progress.resolvedWeakQuizIds]);
-
-  const weakSolverItems = useMemo(() => {
-    return [...progress.failedSolverAttempts].sort(
-      (a, b) => b.failCount - a.failCount || b.lastFailedAt - a.lastFailedAt
-    );
-  }, [progress.failedSolverAttempts]);
+  const { weakQuizTopics, weakSolverItems } = useMemo(
+    () => computeWeakTopicDiagnostics(progress),
+    [progress]
+  );
 
   const totalWeakItems = weakQuizTopics.length + weakSolverItems.length;
   const hasQuizData = progress.quizAttempts.length > 0;
@@ -440,6 +199,17 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
+          {onOpenFlashcards && (
+            <button
+              type="button"
+              onClick={() => onOpenFlashcards()}
+              className="cursor-pointer w-full inline-flex items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Drill Weak Topics in Flashcards</span>
+            </button>
+          )}
+
           {/* Failed Formula Solver Attempts */}
           {weakSolverItems.length > 0 && (
             <div className="space-y-2">
@@ -541,6 +311,16 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
                             <span>Lab</span>
                           </button>
                         )}
+                        {syllabusId && onOpenFlashcards && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenFlashcards(syllabusId)}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-700"
+                          >
+                            <Layers className="h-3 w-3" />
+                            <span>Flashcard</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -630,6 +410,16 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
                         >
                           <Calculator className="h-3 w-3" />
                           <span>Solver</span>
+                        </button>
+                      )}
+                      {onOpenFlashcards && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenFlashcards(item.syllabusTopicId)}
+                          className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-700"
+                        >
+                          <Layers className="h-3 w-3" />
+                          <span>Flashcard</span>
                         </button>
                       )}
                       <button

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { TopNav } from './components/TopNav';
 import { StudySprintView } from './components/StudySprintView';
 import { TheoryHistoryView } from './components/TheoryHistoryView';
 import { SignalLabsView } from './components/SignalLabsView';
+import { PracticalBenchView } from './components/PracticalBenchView';
 import { SolverFormulasView } from './components/SolverFormulasView';
 import { TimedQuizView } from './components/TimedQuizView';
+import { ConfettiBurstEvent, ConfettiShower } from './components/ConfettiShower';
+import { SYLLABUS_TOPICS } from './data/syllabusData';
 import {
   FailedSolverAttempt,
   LabType,
@@ -53,6 +57,31 @@ export default function App() {
   const [theorySubTab, setTheorySubTab] = useState<'principles' | 'timeline' | 'essays'>('principles');
   const [autoStartQuiz, setAutoStartQuiz] = useState<'cat_sprint' | null>(null);
   const [progress, setProgress] = useState<StudyProgressState>(loadInitialProgress);
+  const [confettiBurst, setConfettiBurst] = useState<ConfettiBurstEvent | null>(null);
+  const [reinforcementMsg, setReinforcementMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const triggerReinforcement = (
+    variant: 'subtle' | 'celebrate',
+    message: string
+  ) => {
+    setConfettiBurst({ id: Date.now() + Math.random(), variant });
+    setReinforcementMsg(message);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setReinforcementMsg(null);
+    }, 2600);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -63,11 +92,22 @@ export default function App() {
   }, [progress]);
 
   const handleToggleTopic = (topicId: string) => {
+    const exists = progress.completedTopics.includes(topicId);
+    if (!exists) {
+      const nextCount = progress.completedTopics.length + 1;
+      const total = SYLLABUS_TOPICS.length;
+      const variant = nextCount === total ? 'celebrate' : 'subtle';
+      const msg =
+        nextCount === total
+          ? `All ${total} syllabus topics mastered!`
+          : `Topic mastered · ${nextCount} / ${total} complete`;
+      triggerReinforcement(variant, msg);
+    }
     setProgress((prev) => {
-      const exists = prev.completedTopics.includes(topicId);
+      const already = prev.completedTopics.includes(topicId);
       return {
         ...prev,
-        completedTopics: exists
+        completedTopics: already
           ? prev.completedTopics.filter((id) => id !== topicId)
           : [...prev.completedTopics, topicId],
       };
@@ -75,14 +115,22 @@ export default function App() {
   };
 
   const handleToggleMasteredExample = (exId: string) => {
+    const exists = progress.masteredExamples.includes(exId);
+    if (!exists) {
+      const nextCount = progress.masteredExamples.length + 1;
+      triggerReinforcement(
+        'subtle',
+        `Worked problem mastered · ${nextCount} / 12`
+      );
+    }
     setProgress((prev) => {
-      const exists = prev.masteredExamples.includes(exId);
+      const already = prev.masteredExamples.includes(exId);
       return {
         ...prev,
-        masteredExamples: exists
+        masteredExamples: already
           ? prev.masteredExamples.filter((id) => id !== exId)
           : [...prev.masteredExamples, exId],
-        failedSolverAttempts: !exists
+        failedSolverAttempts: !already
           ? prev.failedSolverAttempts.filter((item) => item.id !== exId)
           : prev.failedSolverAttempts,
       };
@@ -90,14 +138,22 @@ export default function App() {
   };
 
   const handleToggleMasteredEssay = (essayId: string) => {
+    const exists = progress.masteredEssays.includes(essayId);
+    if (!exists) {
+      const nextCount = progress.masteredEssays.length + 1;
+      triggerReinforcement(
+        'subtle',
+        `Concept essay mastered · ${nextCount} / 9`
+      );
+    }
     setProgress((prev) => {
-      const exists = prev.masteredEssays.includes(essayId);
+      const already = prev.masteredEssays.includes(essayId);
       return {
         ...prev,
-        masteredEssays: exists
+        masteredEssays: already
           ? prev.masteredEssays.filter((id) => id !== essayId)
           : [...prev.masteredEssays, essayId],
-        failedSolverAttempts: !exists
+        failedSolverAttempts: !already
           ? prev.failedSolverAttempts.filter((item) => item.id !== essayId)
           : prev.failedSolverAttempts,
       };
@@ -153,6 +209,18 @@ export default function App() {
   };
 
   const handleSaveQuizAttempt = (attempt: QuizAttempt) => {
+    const pct = attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0;
+    const label =
+      attempt.mode === 'cat_sprint'
+        ? 'CAT Sprint complete'
+        : attempt.mode === 'full_exam'
+        ? 'Full Mock Exam complete'
+        : 'Module Drill complete';
+    triggerReinforcement(
+      attempt.mode === 'module_drill' ? 'subtle' : 'celebrate',
+      `${label} · ${attempt.score}/${attempt.total} (${pct}%)`
+    );
+
     const newlyMissedIds = new Set(
       (attempt.missedTopics || []).map((m) => m.questionId)
     );
@@ -232,6 +300,14 @@ export default function App() {
           />
         )}
 
+        {activeTab === WorkspaceTab.BENCH && (
+          <PracticalBenchView
+            onOpenLab={handleOpenLab}
+            onOpenCalculator={handleOpenCalculator}
+            onOpenTheory={handleOpenTheory}
+          />
+        )}
+
         {activeTab === WorkspaceTab.SOLVER && (
           <SolverFormulasView
             initialCalcId={requestedCalcId}
@@ -259,6 +335,19 @@ export default function App() {
           <span>Progress saved locally in your browser</span>
         </div>
       </footer>
+
+      <ConfettiShower burst={confettiBurst} />
+
+      {reinforcementMsg && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="animate-toast-in pointer-events-none fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-900 shadow-sm"
+        >
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span className="tabular-nums">{reinforcementMsg}</span>
+        </div>
+      )}
     </div>
   );
 }
