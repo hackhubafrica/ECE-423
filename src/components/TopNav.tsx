@@ -9,6 +9,7 @@ interface TopNavProps {
 
 const NAV_ITEMS: { id: WorkspaceTab; label: string }[] = [
   { id: WorkspaceTab.SPRINT, label: 'Study Sprint' },
+  { id: WorkspaceTab.THEORY, label: 'Theory & History' },
   { id: WorkspaceTab.LABS, label: 'Signal Labs' },
   { id: WorkspaceTab.SOLVER, label: 'Solver & Formulas' },
   { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },

@@ -181,6 +181,10 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
   // LOBBY
   // =========================================================================
   if (phase === 'lobby') {
+    const catCount = QUIZ_QUESTIONS.filter((q) => q.catHighYield).length;
+    const fullCount = QUIZ_QUESTIONS.length;
+    const perModuleCount = Math.round(fullCount / 3);
+
     return (
       <div className="space-y-8">
         <div>
@@ -188,7 +192,7 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
             Timed CAT &amp; Final Exam Simulator
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Test your speed and accuracy under exam conditions, then inspect worked mathematical derivations for every question.
+            Test your speed and accuracy under exam conditions, then inspect worked mathematical derivations and conceptual explanations for every question.
           </p>
         </div>
 
@@ -198,13 +202,13 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span className="font-semibold text-amber-700">Recommended for Tonight</span>
-                <span className="font-mono tabular-nums">15 Questions · 20:00</span>
+                <span className="font-mono tabular-nums">{catCount} Questions · 20:00</span>
               </div>
               <h2 className="text-xl font-bold text-slate-950">
                 Tomorrow&apos;s CAT High-Yield Sprint
               </h2>
               <p className="text-sm leading-relaxed text-slate-600">
-                Curated 15-question timed sprint covering the highest-probability CAT topics across Nyquist/PCM, TDM, Line Coding, Shannon, Delta Modulation, and Digital Modulation BER/Bandwidth.
+                Curated {catCount}-question timed sprint covering the highest-probability CAT derivations and core concepts across Nyquist/PCM, TDM, Line Coding, Shannon, Delta Modulation, and Digital Modulation BER/Bandwidth.
               </p>
             </div>
             <button
@@ -221,13 +225,13 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span className="font-semibold text-sky-700">Next Month Exam Prep</span>
-                <span className="font-mono tabular-nums">30 Questions · 45:00</span>
+                <span className="font-mono tabular-nums">{fullCount} Questions · 45:00</span>
               </div>
               <h2 className="text-xl font-bold text-slate-950">
                 Full ECE 423 Mock Examination
               </h2>
               <p className="text-sm leading-relaxed text-slate-600">
-                Comprehensive 30-question exam simulation spanning all syllabus units including threshold effects, μ-Law/A-Law, DPCM/ADPCM, LPC/CELP/JPEG/MPEG, and matched-filter detection.
+                Comprehensive {fullCount}-question exam simulation spanning numerical problems, threshold effects, μ-Law/A-Law, DPCM/ADPCM, LPC/CELP/JPEG/MPEG, matched-filter receivers, and historical principles.
               </p>
             </div>
             <button
@@ -244,7 +248,7 @@ export const TimedQuizView: React.FC<TimedQuizViewProps> = ({
         <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
           <div>
             <h2 className="text-base font-bold text-slate-950">
-              Untimed Topic Drills (10 Questions Each)
+              Untimed Topic Drills ({perModuleCount} Questions Each)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Practice a single module at your own pace without a countdown clock.

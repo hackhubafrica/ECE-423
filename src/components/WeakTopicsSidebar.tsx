@@ -21,6 +21,7 @@ interface WeakTopicsSidebarProps {
   progress: StudyProgressState;
   onOpenLab: (lab: LabType) => void;
   onOpenCalculator: (calcId?: string) => void;
+  onOpenTheory?: (subTab?: 'principles' | 'timeline' | 'essays') => void;
   onStartCatQuiz: () => void;
   onFocusSyllabusTopic: (syllabusTopicId: string) => void;
   onResolveQuizTopic: (questionIds: string[]) => void;
@@ -197,12 +198,22 @@ const SOLVER_TO_SYLLABUS_ID: Record<string, string> = {
   'ex-mod-2': 'mod-binary',
   'ex-mod-3': 'mod-mary',
   'ex-mod-4': 'mod-receivers',
+  'essay-pcm-1': 'pcm-noise-threshold',
+  'essay-pcm-2': 'pcm-line-coding',
+  'essay-pcm-3': 'pcm-tdm',
+  'essay-comp-1': 'comp-dm',
+  'essay-comp-2': 'comp-nonwaveform',
+  'essay-comp-3': 'comp-nonwaveform',
+  'essay-mod-1': 'mod-receivers',
+  'essay-mod-2': 'mod-metrics',
+  'essay-mod-3': 'mod-mary',
 };
 
 export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
   progress,
   onOpenLab,
   onOpenCalculator,
+  onOpenTheory,
   onStartCatQuiz,
   onFocusSyllabusTopic,
   onResolveQuizTopic,
@@ -457,12 +468,16 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
                           </div>
                           <button
                             type="button"
-                            onClick={() =>
-                              onOpenCalculator(
-                                item.recommendedCalc ||
-                                  (item.source === 'example' ? 'examples' : 'pcm_snr')
-                              )
-                            }
+                            onClick={() => {
+                              if (item.source === 'essay' && onOpenTheory) {
+                                onOpenTheory('essays');
+                              } else {
+                                onOpenCalculator(
+                                  item.recommendedCalc ||
+                                    (item.source === 'example' ? 'examples' : 'pcm_snr')
+                                );
+                              }
+                            }}
                             className="cursor-pointer text-left text-xs font-semibold text-sky-800 hover:text-sky-950 underline underline-offset-2"
                           >
                             {item.title}
@@ -492,19 +507,30 @@ export const WeakTopicsSidebar: React.FC<WeakTopicsSidebarProps> = ({
                             <span>Notes</span>
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenCalculator(
-                              item.recommendedCalc ||
-                                (item.source === 'example' ? 'examples' : 'pcm_snr')
-                            )
-                          }
-                          className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-700"
-                        >
-                          <Calculator className="h-3 w-3" />
-                          <span>Retry Solver</span>
-                        </button>
+                        {item.source === 'essay' && onOpenTheory ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenTheory('essays')}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-700"
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            <span>Practice Essay</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenCalculator(
+                                item.recommendedCalc ||
+                                  (item.source === 'example' ? 'examples' : 'pcm_snr')
+                              )
+                            }
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-700"
+                          >
+                            <Calculator className="h-3 w-3" />
+                            <span>Retry Solver</span>
+                          </button>
+                        )}
                         {item.recommendedLab && (
                           <button
                             type="button"

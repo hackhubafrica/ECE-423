@@ -4,6 +4,8 @@ import {
   BookOpen,
   Calculator,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Clock,
   Sliders,
@@ -17,6 +19,7 @@ import {
   SYLLABUS_TOPICS,
   TONIGHT_CAT_TIMELINE,
 } from '../data/syllabusData';
+import { INLINE_TOPIC_THEORY } from '../data/theoryHistoryData';
 import { MODULATION_CATALOG } from '../utils/dspMath';
 import {
   DigitalModScheme,
@@ -31,6 +34,7 @@ interface StudySprintViewProps {
   onToggleTopic: (topicId: string) => void;
   onOpenLab: (lab: LabType) => void;
   onOpenCalculator: (calcId?: string) => void;
+  onOpenTheory?: (subTab?: 'principles' | 'timeline' | 'essays') => void;
   onStartCatQuiz: () => void;
   onResolveQuizTopic: (questionIds: string[]) => void;
   onResolveSolverAttempt: (id: string) => void;
@@ -41,6 +45,7 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
   onToggleTopic,
   onOpenLab,
   onOpenCalculator,
+  onOpenTheory,
   onStartCatQuiz,
   onResolveQuizTopic,
   onResolveSolverAttempt,
@@ -49,6 +54,11 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
   const [selectedModule, setSelectedModule] = useState<'all' | SyllabusModule>('all');
   const [comparisonTab, setComparisonTab] = useState<'waveform' | 'nonwaveform' | 'modulation'>('waveform');
   const [highlightedTopicId, setHighlightedTopicId] = useState<string | null>(null);
+  const [expandedTheoryIds, setExpandedTheoryIds] = useState<Record<string, boolean>>({});
+
+  const toggleTopicTheory = (topicId: string) => {
+    setExpandedTheoryIds((prev) => ({ ...prev, [topicId]: !prev[topicId] }));
+  };
 
   const handleFocusSyllabusTopic = (syllabusTopicId: string) => {
     setSelectedModule('all');
@@ -308,91 +318,147 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
             const isDone = progress.completedTopics.includes(topic.id);
             const isHighlighted = highlightedTopicId === topic.id;
             const modTitle = MODULE_META[topic.module].title;
+            const inlineTheory = INLINE_TOPIC_THEORY[topic.id];
+            const isTheoryOpen = Boolean(expandedTheoryIds[topic.id]);
             return (
               <div
                 key={topic.id}
                 id={`syllabus-topic-${topic.id}`}
-                className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 transition-colors ${
+                className={`p-5 space-y-3 transition-colors ${
                   isHighlighted ? 'bg-sky-50/70' : 'hover:bg-slate-50/70'
                 }`}
               >
-                <div className="flex items-start gap-3.5">
-                  <button
-                    type="button"
-                    onClick={() => onToggleTopic(topic.id)}
-                    aria-label={`Mark ${topic.title} as ${isDone ? 'incomplete' : 'complete'}`}
-                    className="cursor-pointer mt-0.5 text-slate-400 hover:text-sky-600 shrink-0 focus-visible:outline-2 focus-visible:outline-sky-600"
-                  >
-                    {isDone ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                    ) : (
-                      <Circle className="h-5 w-5" />
-                    )}
-                  </button>
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      <span>{modTitle}</span>
-                      <span aria-hidden="true">·</span>
-                      <span
-                        className={
-                          topic.catPriority === 'Critical'
-                            ? 'font-semibold text-amber-700'
-                            : topic.catPriority === 'High'
-                            ? 'font-semibold text-sky-700'
-                            : 'text-slate-600'
-                        }
-                      >
-                        {topic.catPriority} Priority
-                      </span>
-                    </div>
-                    <h3
-                      className={`text-base font-semibold ${
-                        isDone ? 'text-slate-500 line-through' : 'text-slate-950'
-                      }`}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <button
+                      type="button"
+                      onClick={() => onToggleTopic(topic.id)}
+                      aria-label={`Mark ${topic.title} as ${isDone ? 'incomplete' : 'complete'}`}
+                      className="cursor-pointer mt-0.5 text-slate-400 hover:text-sky-600 shrink-0 focus-visible:outline-2 focus-visible:outline-sky-600"
                     >
-                      {topic.title}
-                    </h3>
-                    <p className="text-sm text-slate-600 max-w-3xl">{topic.summary}</p>
-                    {topic.keyFormula && (
-                      <p className="pt-1 font-mono text-xs font-medium text-slate-800">
-                        Key Formula: {topic.keyFormula}
-                      </p>
+                      {isDone ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      ) : (
+                        <Circle className="h-5 w-5" />
+                      )}
+                    </button>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span>{modTitle}</span>
+                        <span aria-hidden="true">·</span>
+                        <span
+                          className={
+                            topic.catPriority === 'Critical'
+                              ? 'font-semibold text-amber-700'
+                              : topic.catPriority === 'High'
+                              ? 'font-semibold text-sky-700'
+                              : 'text-slate-600'
+                          }
+                        >
+                          {topic.catPriority} Priority
+                        </span>
+                      </div>
+                      <h3
+                        className={`text-base font-semibold ${
+                          isDone ? 'text-slate-500 line-through' : 'text-slate-950'
+                        }`}
+                      >
+                        {topic.title}
+                      </h3>
+                      <p className="text-sm text-slate-600 max-w-3xl">{topic.summary}</p>
+                      {topic.keyFormula && (
+                        <p className="pt-1 font-mono text-xs font-medium text-slate-800">
+                          Key Formula: {topic.keyFormula}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pl-8 lg:pl-0 shrink-0">
+                    {inlineTheory && (
+                      <button
+                        type="button"
+                        onClick={() => toggleTopicTheory(topic.id)}
+                        className={`cursor-pointer inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                          isTheoryOpen
+                            ? 'border-sky-300 bg-sky-50 text-sky-800'
+                            : 'border-slate-200 bg-white text-slate-800 hover:border-sky-300 hover:text-sky-700'
+                        }`}
+                      >
+                        <span>Theory &amp; Pioneer</span>
+                        {isTheoryOpen ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                    {topic.recommendedLab && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLab(topic.recommendedLab!)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
+                      >
+                        <Sliders className="h-3.5 w-3.5" />
+                        <span>Simulate</span>
+                      </button>
+                    )}
+                    {topic.recommendedCalc && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenCalculator(topic.recommendedCalc)}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
+                      >
+                        <Calculator className="h-3.5 w-3.5" />
+                        <span>Calculate</span>
+                      </button>
+                    )}
+                    {!topic.recommendedLab && !topic.recommendedCalc && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenCalculator('examples')}
+                        className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>Worked Problems</span>
+                      </button>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 pl-8 lg:pl-0 shrink-0">
-                  {topic.recommendedLab && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenLab(topic.recommendedLab!)}
-                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
-                    >
-                      <Sliders className="h-3.5 w-3.5" />
-                      <span>Simulate</span>
-                    </button>
-                  )}
-                  {topic.recommendedCalc && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenCalculator(topic.recommendedCalc)}
-                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
-                    >
-                      <Calculator className="h-3.5 w-3.5" />
-                      <span>Calculate</span>
-                    </button>
-                  )}
-                  {!topic.recommendedLab && !topic.recommendedCalc && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenCalculator('examples')}
-                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-300 hover:text-sky-700 whitespace-nowrap shrink-0"
-                    >
-                      <BookOpen className="h-3.5 w-3.5" />
-                      <span>Worked Problems</span>
-                    </button>
-                  )}
-                </div>
+                {inlineTheory && isTheoryOpen && (
+                  <div className="ml-8 rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-2.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900">
+                        Physical Intuition &amp; Origin
+                      </span>
+                      <span className="font-mono text-sky-700 font-medium tabular-nums">
+                        {inlineTheory.historyYear} · {inlineTheory.pioneerNote}
+                      </span>
+                    </div>
+                    <p className="leading-relaxed text-slate-700">{inlineTheory.intuition}</p>
+                    {onOpenTheory && (
+                      <div className="pt-1 flex flex-wrap items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() => onOpenTheory('principles')}
+                          className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                        >
+                          <span>Read Full Principle</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenTheory('timeline')}
+                          className="cursor-pointer inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-950"
+                        >
+                          <span>Open Historical Timeline</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -532,6 +598,7 @@ export const StudySprintView: React.FC<StudySprintViewProps> = ({
             progress={progress}
             onOpenLab={onOpenLab}
             onOpenCalculator={onOpenCalculator}
+            onOpenTheory={onOpenTheory}
             onStartCatQuiz={onStartCatQuiz}
             onFocusSyllabusTopic={handleFocusSyllabusTopic}
             onResolveQuizTopic={onResolveQuizTopic}

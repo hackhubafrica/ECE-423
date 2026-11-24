@@ -6,6 +6,7 @@ export enum SyllabusModule {
 
 export enum WorkspaceTab {
   SPRINT = 'sprint',
+  THEORY = 'theory',
   LABS = 'labs',
   SOLVER = 'solver',
   QUIZ = 'quiz',
@@ -75,7 +76,7 @@ export interface FailedSolverAttempt {
   id: string;
   title: string;
   module: SyllabusModule;
-  source: 'calculator' | 'example';
+  source: 'calculator' | 'example' | 'essay';
   recommendedCalc?: string;
   recommendedLab?: LabType;
   failCount: number;
@@ -95,9 +96,51 @@ export interface QuizAttempt {
   correctQuestionIds?: string[];
 }
 
+export type HistoryEra = '1920s–1940s' | '1950s–1960s' | '1970s–Modern';
+
+export interface TheoryPrinciple {
+  id: string;
+  module: SyllabusModule;
+  title: string;
+  plainEnglishIntuition: string;
+  physicalMechanism: string;
+  whyItMatters: string;
+  commonMisconception: string;
+  pioneerHighlight: string;
+  recommendedLab?: LabType;
+  recommendedCalc?: string;
+}
+
+export interface HistoricalMilestone {
+  id: string;
+  year: string;
+  yearNumeric: number;
+  era: HistoryEra;
+  module: SyllabusModule;
+  pioneer: string;
+  affiliation: string;
+  breakthrough: string;
+  storyAndContext: string;
+  ece423Connection: string;
+  recommendedLab?: LabType;
+}
+
+export interface EssayPrompt {
+  id: string;
+  module: SyllabusModule;
+  catRelevance: 'CAT High-Yield' | 'Final Exam Core';
+  title: string;
+  question: string;
+  marksGuide: string;
+  keyPoints: string[];
+  modelAnswer: string;
+  recommendedLab?: LabType;
+}
+
 export interface StudyProgressState {
   completedTopics: string[];
   masteredExamples: string[];
+  masteredEssays: string[];
   quizAttempts: QuizAttempt[];
   failedSolverAttempts: FailedSolverAttempt[];
   resolvedWeakQuizIds: string[];

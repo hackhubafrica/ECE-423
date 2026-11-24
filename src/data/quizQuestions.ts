@@ -499,4 +499,119 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     explanation:
       'Because ±1 bit transitions suppress the carrier spike at fc, a squaring loop (squares signal to yield cos(4πfct)) or Costas I/Q loop is required for coherent carrier recovery.',
   },
+  {
+    id: 'q-pcm-11',
+    module: SyllabusModule.PCM,
+    topic: 'Uniform Quantization',
+    catHighYield: true,
+    difficulty: 'Standard',
+    question:
+      'Who invented and patented Pulse Code Modulation (PCM) in 1937–1938, establishing the three-step chain of sampling, quantizing, and binary encoding?',
+    options: [
+      'Harry Nyquist at AT&T',
+      'Alec Harley Reeves at Standard Telephones and Cables',
+      'Claude Shannon at MIT',
+      'John Costas at General Electric',
+    ],
+    correctIndex: 1,
+    formulaHint: '1937 concept · 1938 French Patent No. 852,183 (Alec H. Reeves)',
+    explanation:
+      'British engineer Alec Reeves conceived PCM in 1937 while working in Paris (patented 1938), enabling noise-immune regenerative digital voice long before transistors existed.',
+  },
+  {
+    id: 'q-pcm-12',
+    module: SyllabusModule.PCM,
+    topic: 'Quantization Noise',
+    catHighYield: false,
+    difficulty: 'Analytical',
+    question:
+      'In William Bennett’s 1948 quantization noise model, why does uniform quantization noise power equal Δ² / 12?',
+    options: [
+      'Because the quantizer introduces 12 dB of thermal amplifier noise',
+      'Because rounding error is modeled as uniformly distributed over [−Δ/2, +Δ/2], whose variance is Δ²/12',
+      'Because 12 bits are always needed for toll-quality speech',
+      'Because aliasing folds 12 spectral replicas into baseband',
+    ],
+    correctIndex: 1,
+    formulaHint: 'E[q²] = (1/Δ) ∫_{-Δ/2}^{Δ/2} q² dq = Δ² / 12',
+    explanation:
+      'For fine step sizes and busy inputs, quantization error q is uniformly distributed across [−Δ/2, +Δ/2]. Integrating q²/Δ across that interval yields variance σ_q² = Δ²/12.',
+  },
+  {
+    id: 'q-comp-11',
+    module: SyllabusModule.COMPRESSION,
+    topic: "Shannon's Law",
+    catHighYield: true,
+    difficulty: 'Analytical',
+    question:
+      'What fundamental separation did Claude Shannon’s 1948 "A Mathematical Theory of Communication" prove for digital communication links?',
+    options: [
+      'Increasing bandwidth B to infinity yields infinite channel capacity even at finite power',
+      'If source rate R < channel capacity C = B·log2(1 + S/N), error-free transmission is theoretically achievable via coding',
+      'Analog FM always achieves higher capacity than PCM',
+      'Quantization noise can be removed completely by linear equalization',
+    ],
+    correctIndex: 1,
+    formulaHint: 'Source coding compresses R < C; channel coding fights noise up to C',
+    explanation:
+      'Shannon proved that arbitrarily low error probability is achievable whenever transmission rate R remains below C = B·log2(1 + S/N). Note that as B → ∞, capacity saturates at 1.44·(S/N0), not infinity.',
+  },
+  {
+    id: 'q-comp-12',
+    module: SyllabusModule.COMPRESSION,
+    topic: 'JPEG Image Coding',
+    catHighYield: false,
+    difficulty: 'Standard',
+    question:
+      'Which 1974 mathematical transform invented by Nasir Ahmed, T. Natarajan, and K. R. Rao serves as the spatial energy-compaction engine inside JPEG and MPEG?',
+    options: [
+      'Fast Fourier Transform (FFT)',
+      'Discrete Cosine Transform (DCT)',
+      'Laplace Transform',
+      'Walsh-Hadamard Transform',
+    ],
+    correctIndex: 1,
+    formulaHint: '2D-DCT on 8×8 pixel blocks packs energy into low-frequency coefficients',
+    explanation:
+      'The Discrete Cosine Transform (DCT) concentrates 8×8 image block energy into a few top-left low-frequency coefficients without boundary discontinuities, allowing perceptual quantization to discard high-frequency clutter.',
+  },
+  {
+    id: 'q-mod-11',
+    module: SyllabusModule.MODULATION,
+    topic: 'Matched Filter Receiver',
+    catHighYield: false,
+    difficulty: 'Standard',
+    question:
+      'Dwight O. North (1943) introduced the matched filter originally for wartime radar. What physical property makes it optimal in AWGN digital receivers?',
+    options: [
+      'It eliminates intersymbol interference even without pulse shaping',
+      'It maximizes the instantaneous signal-to-noise power ratio (2·Eb/N0) at sampling time t = T',
+      'It removes the need for bit synchronization',
+      'It converts QAM constellations into constant-envelope FSK',
+    ],
+    correctIndex: 1,
+    formulaHint: 'Cauchy-Schwarz inequality → SNR_max = 2·E/N0 when h(t) = s(T − t)',
+    explanation:
+      'By the Cauchy-Schwarz inequality, weighting incoming signal + white noise with the time-reversed template s(T − t) maximizes output SNR at t = T regardless of pulse shape.',
+  },
+  {
+    id: 'q-mod-12',
+    module: SyllabusModule.MODULATION,
+    topic: 'Receiver Synchronization',
+    catHighYield: true,
+    difficulty: 'Standard',
+    question:
+      'John P. Costas invented the Costas Loop in 1956 to solve what practical receiver problem in suppressed-carrier modulation (such as BPSK and DSB-SC)?',
+    options: [
+      'Recovering the missing carrier phase directly using orthogonal I and Q feedback arms without transmitting a pilot tone',
+      'Compressing voice signals from 64 kbps down to 2.4 kbps',
+      'Generating non-uniform μ-Law companding curves',
+      'Measuring Nyquist aliasing in baseband ADCs',
+    ],
+    correctIndex: 0,
+    formulaHint: 'I·Q phase-detector product removes ±1 data sign to track carrier phase',
+    explanation:
+      'Multiplying the in-phase (I) and quadrature (Q) demodulator arms cancels the ±1 binary data polarity (since (±1)² = +1), producing a pure phase-error signal to lock the local oscillator.',
+  },
 ];
+

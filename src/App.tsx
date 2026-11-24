@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { TopNav } from './components/TopNav';
 import { StudySprintView } from './components/StudySprintView';
+import { TheoryHistoryView } from './components/TheoryHistoryView';
 import { SignalLabsView } from './components/SignalLabsView';
 import { SolverFormulasView } from './components/SolverFormulasView';
 import { TimedQuizView } from './components/TimedQuizView';
@@ -17,6 +18,7 @@ const STORAGE_KEY = 'ece423_study_progress_v1';
 const DEFAULT_PROGRESS: StudyProgressState = {
   completedTopics: [],
   masteredExamples: [],
+  masteredEssays: [],
   quizAttempts: [],
   failedSolverAttempts: [],
   resolvedWeakQuizIds: [],
@@ -30,6 +32,7 @@ function loadInitialProgress(): StudyProgressState {
     return {
       completedTopics: Array.isArray(parsed.completedTopics) ? parsed.completedTopics : [],
       masteredExamples: Array.isArray(parsed.masteredExamples) ? parsed.masteredExamples : [],
+      masteredEssays: Array.isArray(parsed.masteredEssays) ? parsed.masteredEssays : [],
       quizAttempts: Array.isArray(parsed.quizAttempts) ? parsed.quizAttempts : [],
       failedSolverAttempts: Array.isArray(parsed.failedSolverAttempts)
         ? parsed.failedSolverAttempts
@@ -47,6 +50,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(WorkspaceTab.SPRINT);
   const [activeLab, setActiveLab] = useState<LabType>(LabType.SAMPLING_PCM);
   const [requestedCalcId, setRequestedCalcId] = useState<string | undefined>(undefined);
+  const [theorySubTab, setTheorySubTab] = useState<'principles' | 'timeline' | 'essays'>('principles');
   const [autoStartQuiz, setAutoStartQuiz] = useState<'cat_sprint' | null>(null);
   const [progress, setProgress] = useState<StudyProgressState>(loadInitialProgress);
 
@@ -80,6 +84,21 @@ export default function App() {
           : [...prev.masteredExamples, exId],
         failedSolverAttempts: !exists
           ? prev.failedSolverAttempts.filter((item) => item.id !== exId)
+          : prev.failedSolverAttempts,
+      };
+    });
+  };
+
+  const handleToggleMasteredEssay = (essayId: string) => {
+    setProgress((prev) => {
+      const exists = prev.masteredEssays.includes(essayId);
+      return {
+        ...prev,
+        masteredEssays: exists
+          ? prev.masteredEssays.filter((id) => id !== essayId)
+          : [...prev.masteredEssays, essayId],
+        failedSolverAttempts: !exists
+          ? prev.failedSolverAttempts.filter((item) => item.id !== essayId)
           : prev.failedSolverAttempts,
       };
     });
@@ -158,6 +177,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleOpenTheory = (subTab: 'principles' | 'timeline' | 'essays' = 'principles') => {
+    setTheorySubTab(subTab);
+    setActiveTab(WorkspaceTab.THEORY);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleStartCatQuiz = () => {
     setAutoStartQuiz('cat_sprint');
     setActiveTab(WorkspaceTab.QUIZ);
@@ -179,14 +204,32 @@ export default function App() {
             onToggleTopic={handleToggleTopic}
             onOpenLab={handleOpenLab}
             onOpenCalculator={handleOpenCalculator}
+            onOpenTheory={handleOpenTheory}
             onStartCatQuiz={handleStartCatQuiz}
             onResolveQuizTopic={handleResolveQuizTopic}
             onResolveSolverAttempt={handleResolveSolverAttempt}
           />
         )}
 
+        {activeTab === WorkspaceTab.THEORY && (
+          <TheoryHistoryView
+            initialSubTab={theorySubTab}
+            masteredEssays={progress.masteredEssays}
+            failedSolverAttempts={progress.failedSolverAttempts}
+            onToggleMasteredEssay={handleToggleMasteredEssay}
+            onRecordEssayFailure={handleRecordSolverFailure}
+            onResolveAttempt={handleResolveSolverAttempt}
+            onOpenLab={handleOpenLab}
+            onOpenCalculator={handleOpenCalculator}
+          />
+        )}
+
         {activeTab === WorkspaceTab.LABS && (
-          <SignalLabsView activeLab={activeLab} onSelectLab={setActiveLab} />
+          <SignalLabsView
+            activeLab={activeLab}
+            onSelectLab={setActiveLab}
+            onOpenTheory={handleOpenTheory}
+          />
         )}
 
         {activeTab === WorkspaceTab.SOLVER && (

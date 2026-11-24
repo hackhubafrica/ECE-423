@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Pause,
   Play,
@@ -27,6 +28,7 @@ import {
 interface SignalLabsViewProps {
   activeLab: LabType;
   onSelectLab: (lab: LabType) => void;
+  onOpenTheory?: (subTab?: 'principles' | 'timeline' | 'essays') => void;
 }
 
 const LAB_TABS: { id: LabType; label: string }[] = [
@@ -40,6 +42,7 @@ const LAB_TABS: { id: LabType; label: string }[] = [
 export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
   activeLab,
   onSelectLab,
+  onOpenTheory,
 }) => {
   // Lab 1: Sampling & PCM
   const [fm, setFm] = useState(2.0); // kHz
@@ -781,6 +784,25 @@ export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
             <p className="text-xs leading-relaxed text-slate-600">
               <strong>Exam Insight:</strong> Drop <em>fs</em> below 2·<em>fm</em> to watch the dashed amber alias frequency appear. Increasing <em>n</em> by 1 bit halves Δ and adds +6.02 dB SQNR.
             </p>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5 text-xs">
+              <div className="font-semibold text-slate-900">
+                Historical Context · 1928–1948
+              </div>
+              <p className="leading-relaxed text-slate-600">
+                <strong>Harry Nyquist</strong> (1928) and <strong>Vladimir Kotelnikov</strong> (1933) proved bandlimited reconstruction, <strong>Alec Reeves</strong> patented PCM in 1937, and <strong>William Bennett</strong> derived the Δ²/12 noise law in 1948.
+              </p>
+              {onOpenTheory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTheory('timeline')}
+                  className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  <span>Read History &amp; Theory</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1006,6 +1028,25 @@ export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
             <p className="text-xs leading-relaxed text-slate-600">
               <strong>Look at the green ticks on +x:</strong> Logarithmic compression packs quantization steps densely near 0 V so quiet speech samples experience far smaller step errors.
             </p>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5 text-xs">
+              <div className="font-semibold text-slate-900">
+                Historical Context · 1957–1962
+              </div>
+              <p className="leading-relaxed text-slate-600">
+                <strong>Bernard Smith</strong> (Bell Labs, 1957) formalized μ-Law instantaneous companding while <strong>K. W. Cattermole</strong> shaped European A-Law, letting 8-bit speech match 12–13-bit linear PCM.
+              </p>
+              {onOpenTheory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTheory('timeline')}
+                  className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  <span>Read History &amp; Theory</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1211,6 +1252,25 @@ export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
                   {lineMath.info.bandwidthFactor}
                 </span>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5 text-xs">
+              <div className="font-semibold text-slate-900">
+                Historical Context · 1962 T1 &amp; Ethernet
+              </div>
+              <p className="leading-relaxed text-slate-600">
+                <strong>Bell Labs</strong> deployed Bipolar AMI on the 1962 T1 carrier to eliminate transformer DC wander and catch line errors via bipolar violations; <strong>IEEE 802.3</strong> adopted Manchester for self-clocking Ethernet.
+              </p>
+              {onOpenTheory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTheory('principles')}
+                  className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  <span>Read Sync &amp; Line Theory</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1426,6 +1486,25 @@ export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
                   {dmMath.simSnrDb.toFixed(1)} dB
                 </span>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5 text-xs">
+              <div className="font-semibold text-slate-900">
+                Historical Context · 1952 Philips &amp; Bell Labs
+              </div>
+              <p className="leading-relaxed text-slate-600">
+                <strong>Frits de Jager</strong> (Philips Research, 1952) formalized 1-bit Delta Modulation alongside <strong>C. Chapin Cutler&apos;s</strong> DPCM patent, trading high oversampling for minimal quantizer hardware.
+              </p>
+              {onOpenTheory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTheory('timeline')}
+                  className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  <span>Read Predictive Coding History</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1668,6 +1747,25 @@ export const SignalLabsView: React.FC<SignalLabsViewProps> = ({
             <p className="text-xs leading-relaxed text-slate-600">
               <strong>Watch the scatter:</strong> Lower <em>Eb/N0</em> below 6 dB in 16-QAM and adjacent decision regions overlap heavily, while BPSK/QPSK stay cleanly separated.
             </p>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-1.5 text-xs">
+              <div className="font-semibold text-slate-900">
+                Historical Context · 1943–1972
+              </div>
+              <p className="leading-relaxed text-slate-600">
+                Coherent receivers pair <strong>Dwight North&apos;s</strong> matched filter (1943) with <strong>John Costas&apos;s</strong> I/Q carrier loop (1956), while <strong>Rudi de Buda</strong> (1972) proved MSK&apos;s constant-envelope BPSK-level error performance.
+              </p>
+              {onOpenTheory && (
+                <button
+                  type="button"
+                  onClick={() => onOpenTheory('timeline')}
+                  className="cursor-pointer inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900"
+                >
+                  <span>Read Modulation Pioneers</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
