@@ -51,6 +51,12 @@ import { StepAnalyzerSection } from './StepAnalyzerSection';
 import { SensitivityAnalysisSection } from './SensitivityAnalysisSection';
 import { FreqResponse3DSection } from './FreqResponse3DSection';
 import { SignalCorrelationSection } from './SignalCorrelationSection';
+import {
+  CONTROL_BENCH_CATEGORIES,
+  ControlBenchSidebar,
+  ControlBenchTabId,
+  getControlBenchNavItems,
+} from './ControlBenchSidebar';
 
 interface ControlSample {
   tMs: number;
@@ -96,7 +102,30 @@ function nowTs(): string {
 }
 
 export const ControlBenchView: React.FC = () => {
-  const [subTab, setSubTab] = useState<'pid_sim' | 'step_analyzer' | 'sensitivity' | 'correlation' | 'opamp_sim' | 'bode_gen' | 'freq_3d' | 'root_locus' | 'lqr_design' | 'state_exp' | 'monitor' | 'wiring' | 'scripts'>('pid_sim');
+  const [subTab, setSubTab] = useState<ControlBenchTabId>('pid_sim');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('ece433_ctrl_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [sidebarFilter, setSidebarFilter] = useState<string>('');
+  const [showSimulatorGrid, setShowSimulatorGrid] = useState<boolean>(true);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ece433_ctrl_sidebar_collapsed', String(sidebarCollapsed));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [sidebarCollapsed]);
+
+  const navItems = useMemo(
+    () => getControlBenchNavItems(CONTROL_BENCH_LABS.length, CONTROL_SCRIPT_PACK.length),
+    []
+  );
+  const activeNavItem = navItems.find((item) => item.id === subTab) ?? navItems[0];
 
   // Interactive Recharts PID Simulator State
   const [kp, setKp] = useState<number>(3.2);
@@ -463,48 +492,153 @@ export const ControlBenchView: React.FC = () => {
     CONTROL_SCRIPT_PACK[0];
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">
             Control Bench: Interactive PID, Web Serial &amp; MATLAB/Python
           </h1>
-          <p className="mt-1 text-sm text-slate-600 max-w-2xl">
+          <p className="mt-1 text-sm text-slate-600 max-w-3xl">
             Tune Kp, Ki, and Kd in real time with Recharts transient plots, push gains to an ESP32 over Web Serial, or export MATLAB/Simulink and Python scripts.
           </p>
         </div>
 
-        <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 shrink-0">
-          {[
-            { id: 'pid_sim', label: 'PID Simulator' },
-            { id: 'step_analyzer', label: 'Step Analyzer' },
-            { id: 'sensitivity', label: 'Sensitivity Analysis' },
-            { id: 'correlation', label: 'Signal Correlation' },
-            { id: 'opamp_sim', label: 'Op-Amp PID Circuit' },
-            { id: 'bode_gen', label: 'Bode Plot & Margins' },
-            { id: 'freq_3d', label: '3D Pole-Zero Bode' },
-            { id: 'root_locus', label: 'Root Locus' },
-            { id: 'lqr_design', label: 'LQR Optimal' },
-            { id: 'state_exp', label: 'e^(At) & Trajectories' },
-            { id: 'monitor', label: 'Live Serial Monitor' },
-            { id: 'wiring', label: `Op-Amp & ESP32 Wiring (${CONTROL_BENCH_LABS.length})` },
-            { id: 'scripts', label: `MATLAB / Python / ESP32 (${CONTROL_SCRIPT_PACK.length})` },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSubTab(t.id as typeof subTab)}
-              className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                subTab === t.id
-                  ? 'bg-white text-slate-950 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Desktop active breadcrumb metadata (clean unboxed text) */}
+        <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 shrink-0">
+          <span>{activeNavItem.category}</span>
+          <span aria-hidden="true">·</span>
+          <span className="font-semibold text-slate-900">{activeNavItem.label}</span>
+        </div>
+
+        {/* Mobile / Tablet compact grouped dropdown */}
+        <div className="lg:hidden w-full sm:w-72 shrink-0">
+          <label htmlFor="ctrl-bench-mobile-select" className="sr-only">
+            Select Control Bench Simulator
+          </label>
+          <select
+            id="ctrl-bench-mobile-select"
+            value={subTab}
+            onChange={(e) => setSubTab(e.target.value as ControlBenchTabId)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 focus:border-sky-500 focus:outline-none"
+          >
+            {CONTROL_BENCH_CATEGORIES.map((category) => (
+              <optgroup key={category} label={category}>
+                {navItems
+                  .filter((item) => item.category === category)
+                  .map((item) => (
+                    <option
+                      key={item.id}
+                      value={item.id}
+                      title={`${item.label} — ${item.description}`}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
         </div>
       </div>
+
+      <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+        <ControlBenchSidebar
+          items={navItems}
+          activeTab={subTab}
+          collapsed={sidebarCollapsed}
+          filterQuery={sidebarFilter}
+          onSelectTab={setSubTab}
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+          onFilterChange={setSidebarFilter}
+        />
+
+        <div className="flex-1 min-w-0 space-y-6">
+          {/* ================================================================= */}
+          {/* SIMULATOR QUICK-ACCESS DIRECTORY GRID (DESCRIPTIVE TITLES + TIPS) */}
+          {/* ================================================================= */}
+          <section
+            aria-label="Control Bench Simulator Directory"
+            className="space-y-2.5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <h2 className="font-bold text-slate-900">Simulator Quick-Access Grid</h2>
+                <span aria-hidden="true">·</span>
+                <span>Hover or focus any simulator card for a brief description</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSimulatorGrid((v) => !v)}
+                aria-expanded={showSimulatorGrid}
+                title={showSimulatorGrid ? 'Collapse simulator quick-access grid' : 'Expand simulator quick-access grid'}
+                className="cursor-pointer inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <span>{showSimulatorGrid ? 'Hide Grid' : 'Show Grid'}</span>
+                {showSimulatorGrid ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+
+            {showSimulatorGrid && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+                {navItems.map((item, idx) => {
+                  const isActive = subTab === item.id;
+                  const tooltipId = `grid-sim-tip-${item.id}`;
+                  const alignRightOnXl = idx % 4 === 3;
+                  return (
+                    <div key={item.id} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setSubTab(item.id)}
+                        aria-pressed={isActive}
+                        aria-describedby={tooltipId}
+                        title={`${item.label} (${item.category}) — ${item.description}`}
+                        className={`cursor-pointer w-full rounded-xl border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 ${
+                          isActive
+                            ? 'border-sky-500 bg-sky-50/70 text-slate-950'
+                            : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold truncate">
+                            {item.label}
+                          </span>
+                          <span
+                            className={`font-mono text-[10px] font-semibold shrink-0 tabular-nums ${
+                              isActive ? 'text-sky-700' : 'text-slate-400'
+                            }`}
+                          >
+                            {item.shortCode}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                          {item.category}
+                        </div>
+                      </button>
+
+                      {/* Hover & keyboard-focus brief tooltip */}
+                      <div
+                        id={tooltipId}
+                        role="tooltip"
+                        className={`pointer-events-none absolute bottom-full mb-2 z-30 w-64 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] leading-relaxed text-slate-100 shadow-lg opacity-0 invisible transition-opacity duration-150 group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible ${
+                          alignRightOnXl ? 'left-0 xl:left-auto xl:right-0' : 'left-0'
+                        }`}
+                      >
+                        <div className="font-semibold text-white">
+                          {item.label}
+                        </div>
+                        <div className="mt-0.5 text-slate-300">
+                          {item.description}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
       {/* ===================================================================== */}
       {/* ITERATIVE DESIGN CONSTRAINTS SUMMARY TABLE (BODE + ROOT LOCUS)        */}
@@ -1062,7 +1196,10 @@ export const ControlBenchView: React.FC = () => {
       {subTab === 'pid_sim' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Control Panel */}
-          <div className="lg:col-span-4 rounded-xl border border-slate-200 bg-white p-5 space-y-5">
+          <div
+            title="Real-Time PID Gains — Tune Kp, Ki, Kd, saturation limits, and anti-windup mode"
+            className="lg:col-span-4 rounded-xl border border-slate-200 bg-white p-5 space-y-5"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <Sliders className="h-4 w-4 text-sky-600" />
@@ -1385,7 +1522,10 @@ export const ControlBenchView: React.FC = () => {
             </div>
 
             {/* Primary Step Response Chart (Recharts) */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+            <div
+              title="Unit Step Transient Response — Interactive closed-loop output y(t), setpoint r(t), and actuator effort u(t)"
+              className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="text-base font-semibold text-slate-950">
@@ -1929,7 +2069,7 @@ export const ControlBenchView: React.FC = () => {
       {/* ===================================================================== */}
       {subTab === 'wiring' && (
         <div className="space-y-6">
-          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 w-fit">
+          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 max-w-full w-fit">
             {CONTROL_BENCH_LABS.map((g) => (
               <button
                 key={g.id}
@@ -2137,6 +2277,8 @@ export const ControlBenchView: React.FC = () => {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

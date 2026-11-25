@@ -28,6 +28,15 @@ import { MODULE_META } from '../data/syllabusData';
 import { LabType } from '../types/ece423';
 import { muLawCompress, muLawExpand } from '../utils/dspMath';
 import { InteractiveWiringDiagram } from './InteractiveWiringDiagram';
+import {
+  describeUsbSerialPort,
+  DtrRtsMode,
+  ESP32_USB_FILTERS,
+  PRESET_BAUD_RATES,
+  SerialConfigPanel,
+  SerialPortHandle,
+  TxLineEnding,
+} from './SerialConfigPanel';
 
 interface PracticalBenchViewProps {
   onOpenLab: (lab: LabType) => void;
@@ -50,16 +59,14 @@ interface SerialLogLine {
   text: string;
 }
 
-type SerialPortHandle = {
-  open: (options: { baudRate: number }) => Promise<void>;
-  close: () => Promise<void>;
-  readable: ReadableStream<Uint8Array> | null;
-  writable: WritableStream<Uint8Array> | null;
-};
-
 type NavigatorWithSerial = Navigator & {
   serial?: {
-    requestPort: () => Promise<SerialPortHandle>;
+    requestPort: (options?: {
+      filters?: Array<{ usbVendorId?: number; usbProductId?: number }>;
+    }) => Promise<SerialPortHandle>;
+    getPorts?: () => Promise<SerialPortHandle[]>;
+    addEventListener?: (type: 'connect' | 'disconnect', listener: (ev: Event) => void) => void;
+    removeEventListener?: (type: 'connect' | 'disconnect', listener: (ev: Event) => void) => void;
   };
 };
 
@@ -69,7 +76,33 @@ type DspMode = 'pcm' | 'mulaw' | 'dm';
 
 const MAX_BUFFER = 140;
 const MAX_SERIAL_LOGS = 90;
-const BAUD_RATES = [9600, 115200, 230400, 921600] as const;
+
+function readStoredString(key: string, fallback: string): string {
+  try {
+    const val = window.localStorage.getItem(key);
+    return val && val.trim() ? val : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readStoredBaud(key: string, fallback: number): number {
+  try {
+    const val = window.localStorage.getItem(key);
+    const parsed = val ? parseInt(val, 10) : NaN;
+    return Number.isFinite(parsed) && parsed >= 1200 && parsed <= 2000000 ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function applySerialConfigToScript(code: string, comPort: string, baud: number): string {
+  return code
+    .replace(/PORT\s*=\s*"[^"]*"/, `PORT = "${comPort}"`)
+    .replace(/BAUD\s*=\s*\d+/, `BAUD = ${baud}`)
+    .replace(/portName\s*=\s*"[^"]*"/, `portName = "${comPort}"`)
+    .replace(/baudRate\s*=\s*\d+/, `baudRate = ${baud}`);
+}
 
 function downloadTextFile(filename: string, content: string, mime = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mime });
@@ -141,7 +174,26 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
 
   // Sub-tab 1: Live Web Serial Monitor & Waveform Analyzer
   const [streamSource, setStreamSource] = useState<'simulating' | 'serial' | 'paused'>('simulating');
-  const [baudRate, setBaudRate] = useState<number>(115200);
+  const [comPortLabel, setComPortLabel] = useState<string>(() =>
+    readStoredString('ece423_esp32_com_port', 'COM5')
+  );
+  const [baudRate, setBaudRate] = useState<number>(() =>
+    readStoredBaud('ece423_esp32_baud_rate', 115200)
+  );
+  const [pairedPorts, setPairedPorts] = useState<SerialPortHandle[]>([]);
+  const [selectedPortIndex, setSelectedPortIndex] = useState<number>(-1);
+  const [filterEsp32Vendors, setFilterEsp32Vendors] = useState<boolean>(true);
+  const [dataBits, setDataBits] = useState<7 | 8>(8);
+  const [parity, setParity] = useState<'none' | 'even' | 'odd'>('none');
+  const [stopBits, setStopBits] = useState<1 | 2>(1);
+  const [flowControl, setFlowControl] = useState<'none' | 'hardware'>('none');
+  const [bufferSize, setBufferSize] = useState<number>(8192);
+  const [dtrRtsMode, setDtrRtsMode] = useState<DtrRtsMode>('hold_low');
+  const [txLineEnding, setTxLineEnding] = useState<TxLineEnding>('lf');
+  const [autoReconnect, setAutoReconnect] = useState<boolean>(true);
+  const [settingsDirtyWhileConnected, setSettingsDirtyWhileConnected] = useState<boolean>(false);
+  const [parseErrorCount, setParseErrorCount] = useState<number>(0);
+  const [reconnectCount, setReconnectCount] = useState<number>(0);
   const [serialError, setSerialError] = useState<string | null>(null);
   const [activeChannel, setActiveChannel] = useState<ActiveChannel>('voltage');
   const [dspMode, setDspMode] = useState<DspMode>('pcm');
@@ -170,6 +222,10 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
   const serialPortRef = useRef<SerialPortHandle | null>(null);
   const serialReaderRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const serialAbortRef = useRef<boolean>(false);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef<number>(0);
+  const autoReconnectRef = useRef<boolean>(autoReconnect);
+  autoReconnectRef.current = autoReconnect;
   const monitorPausedRef = useRef<boolean>(false);
   monitorPausedRef.current = monitorPaused;
 
@@ -228,7 +284,57 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     return () => window.clearInterval(interval);
   }, [streamSource, activeChannel]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ece423_esp32_com_port', comPortLabel);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [comPortLabel]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ece423_esp32_baud_rate', String(baudRate));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [baudRate]);
+
+  const scanAuthorizedPorts = async () => {
+    const nav = navigator as NavigatorWithSerial;
+    if (!nav.serial?.getPorts) return;
+    try {
+      const ports = await nav.serial.getPorts();
+      setPairedPorts(ports);
+      setSelectedPortIndex((prev) => {
+        if (ports.length === 0) return -1;
+        if (prev >= 0 && prev < ports.length) return prev;
+        return 0;
+      });
+    } catch {
+      // Ignore permission query errors
+    }
+  };
+
+  useEffect(() => {
+    void scanAuthorizedPorts();
+    const nav = navigator as NavigatorWithSerial;
+    const handlePortChange = () => {
+      void scanAuthorizedPorts();
+    };
+    nav.serial?.addEventListener?.('connect', handlePortChange);
+    nav.serial?.addEventListener?.('disconnect', handlePortChange);
+    return () => {
+      nav.serial?.removeEventListener?.('connect', handlePortChange);
+      nav.serial?.removeEventListener?.('disconnect', handlePortChange);
+    };
+  }, []);
+
   const stopSerialConnection = async (announce = false) => {
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     serialAbortRef.current = true;
     try {
       if (serialReaderRef.current) {
@@ -247,8 +353,9 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     } catch {
       // Ignore port close cleanup errors
     }
+    setSettingsDirtyWhileConnected(false);
     if (announce) {
-      appendSerialLog('SYS', 'USB Web Serial disconnected.');
+      appendSerialLog('SYS', `Disconnected ${comPortLabel}.`);
     }
   };
 
@@ -258,7 +365,161 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     };
   }, []);
 
-  const handleConnectSerial = async () => {
+  const openAndStreamPort = async (port: SerialPortHandle, isReconnect = false) => {
+    await stopSerialConnection(false);
+    await port.open({
+      baudRate,
+      dataBits,
+      stopBits,
+      parity,
+      flowControl,
+      bufferSize,
+    });
+
+    if (port.setSignals) {
+      try {
+        if (dtrRtsMode === 'hold_low') {
+          await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        } else if (dtrRtsMode === 'normal') {
+          await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+        } else {
+          await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+          await new Promise((resolve) => window.setTimeout(resolve, 100));
+          await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        }
+      } catch {
+        // Some virtual/CDC drivers do not expose DTR/RTS lines
+      }
+    }
+
+    serialPortRef.current = port;
+    serialAbortRef.current = false;
+    setSettingsDirtyWhileConnected(false);
+    if (!isReconnect) {
+      setSamples([]);
+      setRxFrameCount(0);
+      setParseErrorCount(0);
+      reconnectAttemptRef.current = 0;
+    }
+    setStreamSource('serial');
+    const framingLabel = `${dataBits}${parity === 'none' ? 'N' : parity === 'even' ? 'E' : 'O'}${stopBits}`;
+    appendSerialLog(
+      'SYS',
+      `${isReconnect ? 'Reconnected' : 'Connected'} ${comPortLabel} @ ${baudRate} baud (${framingLabel}, ${bufferSize} B RX, DTR/RTS: ${dtrRtsMode})`
+    );
+
+    if (!port.readable) {
+      throw new Error('Serial port opened without a readable stream.');
+    }
+
+    const textDecoder = new TextDecoderStream();
+    const readableStreamClosed = port.readable.pipeTo(
+      textDecoder.writable as unknown as WritableStream<Uint8Array>
+    );
+    const reader = textDecoder.readable.getReader();
+    serialReaderRef.current = reader;
+
+    let lineBuf = '';
+    while (!serialAbortRef.current) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      lineBuf += value;
+      const lines = lineBuf.split(/\r?\n/);
+      lineBuf = lines.pop() || '';
+      const batch: BenchSample[] = [];
+      let mismatchInChunk = 0;
+
+      lines.forEach((rawLine) => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) return;
+        appendSerialLog('RX', trimmed);
+        if (trimmed.startsWith('t_ms')) return;
+        const parts = trimmed.split(',');
+        if (parts.length >= 5) {
+          const tMs = parseFloat(parts[0]);
+          const vVolts = parseFloat(parts[1]);
+          const iVolts = parseFloat(parts[2]);
+          const gasVolts = parseFloat(parts[3]);
+          const distCm = parseFloat(parts[4]);
+          if (
+            Number.isFinite(tMs) &&
+            Number.isFinite(vVolts) &&
+            Number.isFinite(iVolts) &&
+            Number.isFinite(gasVolts) &&
+            Number.isFinite(distCm)
+          ) {
+            batch.push({ tMs, vVolts, iVolts, gasVolts, distCm });
+            return;
+          }
+        }
+        // Ignore known firmware handshake/telemetry lines when counting baud mismatches
+        if (!/^(OK|PONG|READY|ESP32|RATE=|STATUS)/i.test(trimmed)) {
+          mismatchInChunk += 1;
+        }
+      });
+
+      if (mismatchInChunk > 0) {
+        setParseErrorCount((c) => c + mismatchInChunk);
+      }
+
+      if (batch.length > 0) {
+        reconnectAttemptRef.current = 0;
+        setRxFrameCount((c) => c + batch.length);
+        setSamples((prev) => [...prev.slice(-(MAX_BUFFER - batch.length)), ...batch]);
+      }
+    }
+    await readableStreamClosed.catch(() => {});
+
+    // Handle unexpected drop with auto-reconnect guard
+    if (!serialAbortRef.current && autoReconnectRef.current && reconnectAttemptRef.current < 3) {
+      reconnectAttemptRef.current += 1;
+      const attemptNum = reconnectAttemptRef.current;
+      setReconnectCount((c) => c + 1);
+      appendSerialLog('SYS', `Serial stream interrupted — auto-reconnect attempt ${attemptNum}/3 in 1.5s...`);
+      reconnectTimerRef.current = window.setTimeout(() => {
+        void openAndStreamPort(port, true).catch((err) => {
+          const msg = err instanceof Error ? err.message : 'Reconnect failed.';
+          setSerialError(msg);
+          setStreamSource('paused');
+        });
+      }, 1500);
+    }
+  };
+
+  const handlePairNewPort = async (): Promise<SerialPortHandle | null> => {
+    setSerialError(null);
+    const nav = navigator as NavigatorWithSerial;
+    if (!nav.serial) {
+      setSerialError(
+        'Web Serial API requires desktop Chrome or Edge over HTTPS/localhost. Keep using the Live Simulator here, or copy the Spyder / MATLAB serial logger script beside this monitor.'
+      );
+      return null;
+    }
+
+    try {
+      const port = await nav.serial.requestPort(
+        filterEsp32Vendors ? { filters: ESP32_USB_FILTERS } : undefined
+      );
+      const ports = (await nav.serial.getPorts?.()) ?? [port];
+      setPairedPorts(ports);
+      const idx = ports.indexOf(port);
+      setSelectedPortIndex(idx >= 0 ? idx : ports.length - 1);
+      appendSerialLog(
+        'SYS',
+        `Paired ${describeUsbSerialPort(port, Math.max(0, idx))} → mapped to ${comPortLabel}`
+      );
+      return port;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Port selection cancelled.';
+      if (!msg.toLowerCase().includes('no port selected')) {
+        setSerialError(msg);
+      }
+      return null;
+    }
+  };
+
+  const handleConnectSerial = async (forcePicker = false) => {
     setSerialError(null);
     const nav = navigator as NavigatorWithSerial;
     if (!nav.serial) {
@@ -269,67 +530,17 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     }
 
     try {
-      await stopSerialConnection(false);
-      const port = await nav.serial.requestPort();
-      await port.open({ baudRate });
-      serialPortRef.current = port;
-      serialAbortRef.current = false;
-      setSamples([]);
-      setRxFrameCount(0);
-      setStreamSource('serial');
-      appendSerialLog('SYS', `Connected to ESP32 via Web Serial @ ${baudRate} baud`);
+      let targetPort: SerialPortHandle | null =
+        !forcePicker && selectedPortIndex >= 0 && pairedPorts[selectedPortIndex]
+          ? pairedPorts[selectedPortIndex]
+          : null;
 
-      if (!port.readable) {
-        throw new Error('Serial port opened without a readable stream.');
+      if (!targetPort) {
+        targetPort = await handlePairNewPort();
       }
+      if (!targetPort) return;
 
-      const textDecoder = new TextDecoderStream();
-      const readableStreamClosed = port.readable.pipeTo(
-        textDecoder.writable as unknown as WritableStream<Uint8Array>
-      );
-      const reader = textDecoder.readable.getReader();
-      serialReaderRef.current = reader;
-
-      let lineBuf = '';
-      while (!serialAbortRef.current) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (!value) continue;
-        lineBuf += value;
-        const lines = lineBuf.split(/\r?\n/);
-        lineBuf = lines.pop() || '';
-        const batch: BenchSample[] = [];
-
-        lines.forEach((rawLine) => {
-          const trimmed = rawLine.trim();
-          if (!trimmed) return;
-          appendSerialLog('RX', trimmed);
-          if (trimmed.startsWith('t_ms')) return;
-          const parts = trimmed.split(',');
-          if (parts.length >= 5) {
-            const tMs = parseFloat(parts[0]);
-            const vVolts = parseFloat(parts[1]);
-            const iVolts = parseFloat(parts[2]);
-            const gasVolts = parseFloat(parts[3]);
-            const distCm = parseFloat(parts[4]);
-            if (
-              Number.isFinite(tMs) &&
-              Number.isFinite(vVolts) &&
-              Number.isFinite(iVolts) &&
-              Number.isFinite(gasVolts) &&
-              Number.isFinite(distCm)
-            ) {
-              batch.push({ tMs, vVolts, iVolts, gasVolts, distCm });
-            }
-          }
-        });
-
-        if (batch.length > 0) {
-          setRxFrameCount((c) => c + batch.length);
-          setSamples((prev) => [...prev.slice(-(MAX_BUFFER - batch.length)), ...batch]);
-        }
-      }
-      await readableStreamClosed.catch(() => {});
+      await openAndStreamPort(targetPort, false);
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : 'Unable to connect to ESP32 serial port.';
@@ -341,9 +552,45 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     }
   };
 
+  const handleReconnectSerial = async () => {
+    const targetPort =
+      serialPortRef.current ??
+      (selectedPortIndex >= 0 ? pairedPorts[selectedPortIndex] : null);
+    if (!targetPort) {
+      await handleConnectSerial(false);
+      return;
+    }
+    try {
+      setSerialError(null);
+      await openAndStreamPort(targetPort, false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unable to reopen serial port.';
+      setSerialError(msg);
+      appendSerialLog('SYS', `Reconnect error: ${msg}`);
+    }
+  };
+
   const handleDisconnectSerial = async () => {
     await stopSerialConnection(true);
     setStreamSource('paused');
+  };
+
+  const handleResetSerialDefaults = () => {
+    setComPortLabel('COM5');
+    setBaudRate(115200);
+    setDataBits(8);
+    setParity('none');
+    setStopBits(1);
+    setFlowControl('none');
+    setBufferSize(8192);
+    setDtrRtsMode('hold_low');
+    setTxLineEnding('lf');
+    setAutoReconnect(true);
+    setFilterEsp32Vendors(true);
+    if (streamSource === 'serial') {
+      setSettingsDirtyWhileConnected(true);
+    }
+    appendSerialLog('SYS', 'Reset UART configuration to ESP32 defaults (COM5 · 115200 · 8N1).');
   };
 
   const handleSendSerialCommand = async (cmdText: string) => {
@@ -352,15 +599,16 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     if (streamSource !== 'serial' || !serialPortRef.current?.writable) {
       appendSerialLog(
         'SYS',
-        `TX queued locally ("${clean}") — connect an ESP32 via Web Serial to transmit over USB UART.`
+        `TX queued locally ("${clean}") — connect ${comPortLabel} @ ${baudRate} baud to transmit over USB UART.`
       );
       setTxInput('');
       return;
     }
 
+    const eol = txLineEnding === 'crlf' ? '\r\n' : txLineEnding === 'cr' ? '\r' : '\n';
     try {
       const writer = serialPortRef.current.writable.getWriter();
-      const encoded = new TextEncoder().encode(`${clean}\n`);
+      const encoded = new TextEncoder().encode(`${clean}${eol}`);
       await writer.write(encoded);
       writer.releaseLock();
       appendSerialLog('TX', clean);
@@ -488,18 +736,32 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
     () => BENCH_SCRIPT_PACK.filter((s) => s.language === 'python' || s.language === 'matlab' || s.language === 'esp32'),
     []
   );
-  const activeCompanionScript =
+  const activeCompanionScriptRaw =
     companionScripts.find((s) => s.id === companionSnippetId) || companionScripts[0];
+  const activeCompanionScript = useMemo(
+    () => ({
+      ...activeCompanionScriptRaw,
+      code: applySerialConfigToScript(activeCompanionScriptRaw.code, comPortLabel, baudRate),
+    }),
+    [activeCompanionScriptRaw, comPortLabel, baudRate]
+  );
 
   const filteredScripts =
     scriptFilter === 'all'
       ? BENCH_SCRIPT_PACK
       : BENCH_SCRIPT_PACK.filter((s) => s.language === scriptFilter);
 
-  const activeScript =
+  const activeScriptRaw =
     filteredScripts.find((s) => s.id === selectedScriptId) ||
     filteredScripts[0] ||
     BENCH_SCRIPT_PACK[0];
+  const activeScript = useMemo(
+    () => ({
+      ...activeScriptRaw,
+      code: applySerialConfigToScript(activeScriptRaw.code, comPortLabel, baudRate),
+    }),
+    [activeScriptRaw, comPortLabel, baudRate]
+  );
 
   const handleExportCaptureCsv = () => {
     const header = 't_ms,v_volts,i_volts,gas_volts,dist_cm\n';
@@ -574,6 +836,68 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
       {/* ================================================================== */}
       {subTab === 'capture' && (
         <div className="space-y-6">
+          {/* ESP32 Serial Port, Baud Rate & Connection Stability Panel */}
+          <SerialConfigPanel
+            webSerialSupported={webSerialSupported}
+            streamSource={streamSource}
+            comPortLabel={comPortLabel}
+            onComPortLabelChange={setComPortLabel}
+            pairedPorts={pairedPorts}
+            selectedPortIndex={selectedPortIndex}
+            onSelectPortIndex={setSelectedPortIndex}
+            onScanPorts={() => void scanAuthorizedPorts()}
+            onPairNewPort={() => void handlePairNewPort()}
+            filterEsp32Vendors={filterEsp32Vendors}
+            onFilterEsp32VendorsChange={setFilterEsp32Vendors}
+            baudRate={baudRate}
+            onBaudRateChange={(next) => {
+              setBaudRate(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            dataBits={dataBits}
+            onDataBitsChange={(next) => {
+              setDataBits(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            parity={parity}
+            onParityChange={(next) => {
+              setParity(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            stopBits={stopBits}
+            onStopBitsChange={(next) => {
+              setStopBits(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            flowControl={flowControl}
+            onFlowControlChange={(next) => {
+              setFlowControl(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            bufferSize={bufferSize}
+            onBufferSizeChange={(next) => {
+              setBufferSize(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            dtrRtsMode={dtrRtsMode}
+            onDtrRtsModeChange={(next) => {
+              setDtrRtsMode(next);
+              if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+            }}
+            txLineEnding={txLineEnding}
+            onTxLineEndingChange={setTxLineEnding}
+            autoReconnect={autoReconnect}
+            onAutoReconnectChange={setAutoReconnect}
+            settingsDirtyWhileConnected={settingsDirtyWhileConnected}
+            rxFrameCount={rxFrameCount}
+            parseErrorCount={parseErrorCount}
+            reconnectCount={reconnectCount}
+            onConnect={() => void handleConnectSerial(false)}
+            onReconnect={() => void handleReconnectSerial()}
+            onDisconnect={() => void handleDisconnectSerial()}
+            onResetDefaults={handleResetSerialDefaults}
+          />
+
           {/* Top Row: Oscilloscope & Channel Controls */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Stage: Oscilloscope & Web Serial Controls */}
@@ -595,9 +919,9 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
 
                 <div className="flex items-center gap-2 text-xs font-semibold">
                   {streamSource === 'serial' ? (
-                    <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                    <span className="inline-flex items-center gap-1.5 text-emerald-700 font-mono tabular-nums">
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>USB Serial Active · {baudRate} baud</span>
+                      <span>{comPortLabel} Active · {baudRate} baud</span>
                     </span>
                   ) : streamSource === 'simulating' ? (
                     <span className="inline-flex items-center gap-1.5 text-sky-700">
@@ -717,27 +1041,41 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
                   <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
                     <span className="font-medium">Baud:</span>
                     <select
-                      value={baudRate}
-                      disabled={streamSource === 'serial'}
-                      onChange={(e) => setBaudRate(parseInt(e.target.value, 10))}
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-2 font-mono text-xs text-slate-900 disabled:bg-slate-100 tabular-nums"
+                      value={
+                        PRESET_BAUD_RATES.includes(
+                          baudRate as (typeof PRESET_BAUD_RATES)[number]
+                        )
+                          ? baudRate
+                          : 'custom'
+                      }
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value, 10);
+                        if (Number.isFinite(parsed)) {
+                          setBaudRate(parsed);
+                          if (streamSource === 'serial') setSettingsDirtyWhileConnected(true);
+                        }
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-2 font-mono text-xs text-slate-900 tabular-nums"
                     >
-                      {BAUD_RATES.map((rate) => (
+                      {PRESET_BAUD_RATES.map((rate) => (
                         <option key={rate} value={rate}>
                           {rate}
                         </option>
                       ))}
+                      {!PRESET_BAUD_RATES.includes(
+                        baudRate as (typeof PRESET_BAUD_RATES)[number]
+                      ) && <option value="custom">{baudRate}</option>}
                     </select>
                   </label>
 
                   <button
                     type="button"
-                    onClick={handleConnectSerial}
+                    onClick={() => void handleConnectSerial(streamSource === 'serial')}
                     className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors whitespace-nowrap shrink-0"
                   >
                     <Usb className="h-3.5 w-3.5" />
                     <span>
-                      {streamSource === 'serial' ? 'Switch Port' : 'Connect ESP32 (Web Serial)'}
+                      {streamSource === 'serial' ? 'Switch Port' : `Connect ${comPortLabel}`}
                     </span>
                   </button>
 
@@ -960,11 +1298,19 @@ export const PracticalBenchView: React.FC<PracticalBenchViewProps> = ({
             <div className="lg:col-span-5 rounded-xl border border-slate-200 bg-white p-5 flex flex-col justify-between gap-4">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Terminal className="h-4 w-4 text-sky-600" />
-                    <h3 className="text-sm font-semibold text-slate-950">
-                      Live Serial Monitor (UART Console)
-                    </h3>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="h-4 w-4 text-sky-600" />
+                      <h3 className="text-sm font-semibold text-slate-950">
+                        Live Serial Monitor (UART Console)
+                      </h3>
+                    </div>
+                    <p className="font-mono text-[11px] text-slate-500 tabular-nums">
+                      {comPortLabel} · {baudRate} baud · {dataBits}
+                      {parity === 'none' ? 'N' : parity === 'even' ? 'E' : 'O'}
+                      {stopBits}
+                      {parseErrorCount > 5 ? ' · Check baud rate (parse mismatches)' : ''}
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-1.5">
