@@ -1,13 +1,15 @@
 import React from 'react';
 import { WorkspaceTab } from '../types/ece423';
+import { CourseId } from '../types/ece433';
 
 interface TopNavProps {
+  course?: CourseId;
   activeTab: WorkspaceTab;
   onSelectTab: (tab: WorkspaceTab) => void;
   onStartCatQuiz: () => void;
 }
 
-const NAV_ITEMS: { id: WorkspaceTab; label: string }[] = [
+const NAV_ITEMS_423: { id: WorkspaceTab; label: string }[] = [
   { id: WorkspaceTab.SPRINT, label: 'Study Sprint' },
   { id: WorkspaceTab.THEORY, label: 'Theory & History' },
   { id: WorkspaceTab.LABS, label: 'Signal Labs' },
@@ -16,11 +18,24 @@ const NAV_ITEMS: { id: WorkspaceTab; label: string }[] = [
   { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },
 ];
 
+const NAV_ITEMS_433: { id: WorkspaceTab; label: string }[] = [
+  { id: WorkspaceTab.SPRINT, label: 'Study Sprint' },
+  { id: WorkspaceTab.THEORY, label: 'Theory & Op-Amps' },
+  { id: WorkspaceTab.LABS, label: 'Control Labs' },
+  { id: WorkspaceTab.BENCH, label: 'Control Bench' },
+  { id: WorkspaceTab.SOLVER, label: 'Solver & Matrices' },
+  { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },
+];
+
 export const TopNav: React.FC<TopNavProps> = ({
+  course = 'ece423',
   activeTab,
   onSelectTab,
   onStartCatQuiz,
 }) => {
+  const navItems = course === 'ece433' ? NAV_ITEMS_433 : NAV_ITEMS_423;
+  const wordmark = course === 'ece433' ? 'ECE 433 Lab' : 'ECE 423 Lab';
+
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1360px] items-center justify-between gap-6 px-6 py-3.5">
@@ -30,7 +45,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           onClick={() => onSelectTab(WorkspaceTab.SPRINT)}
           className="cursor-pointer text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-600"
         >
-          ECE 423 Lab
+          {wordmark}
         </button>
 
         {/* Zone 2: Single-line navigation links */}
@@ -38,7 +53,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           aria-label="Primary workspace navigation"
           className="hidden md:flex items-center gap-5 lg:gap-6 text-sm font-medium text-slate-600"
         >
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
               <button
@@ -74,7 +89,7 @@ export const TopNav: React.FC<TopNavProps> = ({
         aria-label="Mobile workspace navigation"
         className="flex md:hidden items-center justify-between border-t border-slate-100 px-4 py-2 text-xs font-medium text-slate-600 overflow-x-auto gap-4"
       >
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
