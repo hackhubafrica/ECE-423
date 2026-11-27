@@ -27,14 +27,33 @@ const NAV_ITEMS_433: { id: WorkspaceTab; label: string }[] = [
   { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },
 ];
 
+const NAV_ITEMS_471: { id: WorkspaceTab; label: string }[] = [
+  { id: WorkspaceTab.SPRINT, label: 'Study Sprint' },
+  { id: WorkspaceTab.THEORY, label: 'Theory & Lines' },
+  { id: WorkspaceTab.LABS, label: 'Power Labs' },
+  { id: WorkspaceTab.BENCH, label: 'Power Bench' },
+  { id: WorkspaceTab.SOLVER, label: 'Solver & Per-Unit' },
+  { id: WorkspaceTab.QUIZ, label: 'Timed Quiz' },
+];
+
 export const TopNav: React.FC<TopNavProps> = ({
   course = 'ece423',
   activeTab,
   onSelectTab,
   onStartCatQuiz,
 }) => {
-  const navItems = course === 'ece433' ? NAV_ITEMS_433 : NAV_ITEMS_423;
-  const wordmark = course === 'ece433' ? 'ECE 433 Lab' : 'ECE 423 Lab';
+  const navItems =
+    course === 'ece471'
+      ? NAV_ITEMS_471
+      : course === 'ece433'
+      ? NAV_ITEMS_433
+      : NAV_ITEMS_423;
+  const wordmark =
+    course === 'ece471'
+      ? 'ECE 471 Lab'
+      : course === 'ece433'
+      ? 'ECE 433 Lab'
+      : 'ECE 423 Lab';
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm">

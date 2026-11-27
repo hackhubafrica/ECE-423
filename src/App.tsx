@@ -13,13 +13,22 @@ import { ControlLabsView } from './components/ece433/ControlLabsView';
 import { ControlBenchView } from './components/ece433/ControlBenchView';
 import { ControlSolverView } from './components/ece433/ControlSolverView';
 import { ControlQuizView } from './components/ece433/ControlQuizView';
+import { PowerStudySprintView } from './components/ece471/PowerStudySprintView';
+import { PowerTheoryView } from './components/ece471/PowerTheoryView';
+import { PowerLabsView } from './components/ece471/PowerLabsView';
+import { PowerBenchTabId, PowerBenchView } from './components/ece471/PowerBenchView';
+import { PowerSolverView } from './components/ece471/PowerSolverView';
+import { PowerQuizView } from './components/ece471/PowerQuizView';
 import { ConfettiBurstEvent, ConfettiShower } from './components/ConfettiShower';
 import { SYLLABUS_TOPICS } from './data/syllabusData';
 import { CONTROL_SYLLABUS_TOPICS } from './data/ece433SyllabusData';
+import { POWER_SYLLABUS_TOPICS } from './data/ece471SyllabusData';
 import {
   CONTROL_ESSAY_PROMPTS,
 } from './data/ece433TheoryData';
 import { CONTROL_WORKED_EXAMPLES } from './data/ece433PracticeData';
+import { POWER_ESSAY_PROMPTS } from './data/ece471TheoryData';
+import { POWER_WORKED_EXAMPLES } from './data/ece471PracticeData';
 import {
   FailedSolverAttempt,
   LabType,
@@ -34,9 +43,16 @@ import {
   ControlQuizAttempt,
   CourseId,
 } from './types/ece433';
+import {
+  PowerFailedAttempt,
+  PowerLabType,
+  PowerProgressState,
+  PowerQuizAttempt,
+} from './types/ece471';
 
 const STORAGE_KEY_423 = 'ece423_study_progress_v1';
 const STORAGE_KEY_433 = 'ece433_control_progress_v1';
+const STORAGE_KEY_471 = 'ece471_power_progress_v1';
 const COURSE_STORAGE_KEY = 'ece_active_course_v1';
 
 const DEFAULT_PROGRESS_423: StudyProgressState = {
@@ -57,10 +73,20 @@ const DEFAULT_PROGRESS_433: ControlProgressState = {
   resolvedWeakQuizIds: [],
 };
 
+const DEFAULT_PROGRESS_471: PowerProgressState = {
+  completedTopics: [],
+  masteredExamples: [],
+  masteredEssays: [],
+  quizAttempts: [],
+  failedSolverAttempts: [],
+  resolvedWeakQuizIds: [],
+};
+
 function loadInitialCourse(): CourseId {
   try {
     const raw = window.localStorage.getItem(COURSE_STORAGE_KEY);
-    return raw === 'ece433' ? 'ece433' : 'ece423';
+    if (raw === 'ece433' || raw === 'ece471') return raw;
+    return 'ece423';
   } catch {
     return 'ece423';
   }
@@ -110,6 +136,28 @@ function loadInitialProgress433(): ControlProgressState {
   }
 }
 
+function loadInitialProgress471(): PowerProgressState {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_471);
+    if (!raw) return DEFAULT_PROGRESS_471;
+    const parsed = JSON.parse(raw) as Partial<PowerProgressState>;
+    return {
+      completedTopics: Array.isArray(parsed.completedTopics) ? parsed.completedTopics : [],
+      masteredExamples: Array.isArray(parsed.masteredExamples) ? parsed.masteredExamples : [],
+      masteredEssays: Array.isArray(parsed.masteredEssays) ? parsed.masteredEssays : [],
+      quizAttempts: Array.isArray(parsed.quizAttempts) ? parsed.quizAttempts : [],
+      failedSolverAttempts: Array.isArray(parsed.failedSolverAttempts)
+        ? parsed.failedSolverAttempts
+        : [],
+      resolvedWeakQuizIds: Array.isArray(parsed.resolvedWeakQuizIds)
+        ? parsed.resolvedWeakQuizIds
+        : [],
+    };
+  } catch {
+    return DEFAULT_PROGRESS_471;
+  }
+}
+
 export default function App() {
   const [activeCourse, setActiveCourse] = useState<CourseId>(loadInitialCourse);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(WorkspaceTab.SPRINT);
@@ -132,6 +180,20 @@ export default function App() {
   const [ctrlAutoStartQuiz, setCtrlAutoStartQuiz] = useState<'cat_sprint' | null>(null);
   const [controlProgress, setControlProgress] =
     useState<ControlProgressState>(loadInitialProgress433);
+
+  // ECE 471 state
+  const [activePowerLab, setActivePowerLab] = useState<PowerLabType>(
+    PowerLabType.LINE_CORONA
+  );
+  const [activePowerBenchSim, setActivePowerBenchSim] = useState<PowerBenchTabId>(
+    'symmetrical_faults'
+  );
+  const [pwrRequestedCalcId, setPwrRequestedCalcId] = useState<string | undefined>(undefined);
+  const [pwrTheorySubTab, setPwrTheorySubTab] = useState<'principles' | 'timeline' | 'essays'>(
+    'principles'
+  );
+  const [pwrAutoStartQuiz, setPwrAutoStartQuiz] = useState<'cat_sprint' | null>(null);
+  const [powerProgress, setPowerProgress] = useState<PowerProgressState>(loadInitialProgress471);
 
   // Reinforcement confetti + toast
   const [confettiBurst, setConfettiBurst] = useState<ConfettiBurstEvent | null>(null);
@@ -183,6 +245,14 @@ export default function App() {
       // Ignore storage quota issues cleanly
     }
   }, [controlProgress]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY_471, JSON.stringify(powerProgress));
+    } catch {
+      // Ignore storage quota issues cleanly
+    }
+  }, [powerProgress]);
 
   // =========================================================================
   // ECE 423 Handlers
@@ -514,8 +584,183 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // =========================================================================
+  // ECE 471 Handlers
+  // =========================================================================
+  const handleTogglePowerTopic = (topicId: string) => {
+    const exists = powerProgress.completedTopics.includes(topicId);
+    if (!exists) {
+      const nextCount = powerProgress.completedTopics.length + 1;
+      const total = POWER_SYLLABUS_TOPICS.length;
+      const variant = nextCount === total ? 'celebrate' : 'subtle';
+      const msg =
+        nextCount === total
+          ? `All ${total} ECE 471 Power Systems II topics mastered!`
+          : `Power topic mastered · ${nextCount} / ${total} complete`;
+      triggerReinforcement(variant, msg);
+    }
+    setPowerProgress((prev) => {
+      const already = prev.completedTopics.includes(topicId);
+      return {
+        ...prev,
+        completedTopics: already
+          ? prev.completedTopics.filter((id) => id !== topicId)
+          : [...prev.completedTopics, topicId],
+      };
+    });
+  };
+
+  const handleToggleMasteredPowerExample = (exId: string) => {
+    const exists = powerProgress.masteredExamples.includes(exId);
+    if (!exists) {
+      const nextCount = powerProgress.masteredExamples.length + 1;
+      triggerReinforcement(
+        'subtle',
+        `Power worked problem mastered · ${nextCount} / ${POWER_WORKED_EXAMPLES.length}`
+      );
+    }
+    setPowerProgress((prev) => {
+      const already = prev.masteredExamples.includes(exId);
+      return {
+        ...prev,
+        masteredExamples: already
+          ? prev.masteredExamples.filter((id) => id !== exId)
+          : [...prev.masteredExamples, exId],
+        failedSolverAttempts: !already
+          ? prev.failedSolverAttempts.filter((item) => item.id !== exId)
+          : prev.failedSolverAttempts,
+      };
+    });
+  };
+
+  const handleToggleMasteredPowerEssay = (essayId: string) => {
+    const exists = powerProgress.masteredEssays.includes(essayId);
+    if (!exists) {
+      const nextCount = powerProgress.masteredEssays.length + 1;
+      triggerReinforcement(
+        'subtle',
+        `Power essay mastered · ${nextCount} / ${POWER_ESSAY_PROMPTS.length}`
+      );
+    }
+    setPowerProgress((prev) => {
+      const already = prev.masteredEssays.includes(essayId);
+      return {
+        ...prev,
+        masteredEssays: already
+          ? prev.masteredEssays.filter((id) => id !== essayId)
+          : [...prev.masteredEssays, essayId],
+        failedSolverAttempts: !already
+          ? prev.failedSolverAttempts.filter((item) => item.id !== essayId)
+          : prev.failedSolverAttempts,
+      };
+    });
+  };
+
+  const handleRecordPowerFailure = (
+    failure: Omit<PowerFailedAttempt, 'failCount' | 'lastFailedAt'>
+  ) => {
+    setPowerProgress((prev) => {
+      const existing = prev.failedSolverAttempts.find((f) => f.id === failure.id);
+      const updatedList = existing
+        ? prev.failedSolverAttempts.map((f) =>
+            f.id === failure.id
+              ? {
+                  ...f,
+                  failCount: f.failCount + 1,
+                  lastFailedAt: Date.now(),
+                  lastReason: failure.lastReason,
+                }
+              : f
+          )
+        : [
+            {
+              ...failure,
+              failCount: 1,
+              lastFailedAt: Date.now(),
+            },
+            ...prev.failedSolverAttempts,
+          ];
+      return {
+        ...prev,
+        failedSolverAttempts: updatedList,
+      };
+    });
+  };
+
+  const handleResolvePowerAttempt = (id: string) => {
+    setPowerProgress((prev) => ({
+      ...prev,
+      failedSolverAttempts: prev.failedSolverAttempts.filter((item) => item.id !== id),
+    }));
+  };
+
+  const handleResolvePowerQuizTopic = (questionIds: string[]) => {
+    setPowerProgress((prev) => {
+      const merged = new Set([...prev.resolvedWeakQuizIds, ...questionIds]);
+      return {
+        ...prev,
+        resolvedWeakQuizIds: Array.from(merged),
+      };
+    });
+  };
+
+  const handleSavePowerQuizAttempt = (attempt: PowerQuizAttempt) => {
+    const pct = attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0;
+    const label =
+      attempt.mode === 'cat_sprint'
+        ? 'ECE 471 CAT 1 Sprint complete'
+        : attempt.mode === 'full_exam'
+        ? 'ECE 471 Mock Exam complete'
+        : 'ECE 471 Drill complete';
+    triggerReinforcement(
+      attempt.mode === 'cat_sprint' || attempt.mode === 'full_exam' ? 'celebrate' : 'subtle',
+      `${label} · ${attempt.score}/${attempt.total} (${pct}%)`
+    );
+
+    const newlyMissedIds = new Set(
+      (attempt.missedTopics || []).map((m) => m.questionId)
+    );
+    setPowerProgress((prev) => ({
+      ...prev,
+      quizAttempts: [attempt, ...prev.quizAttempts].slice(0, 20),
+      resolvedWeakQuizIds: prev.resolvedWeakQuizIds.filter(
+        (id) => !newlyMissedIds.has(id)
+      ),
+    }));
+  };
+
+  const handleOpenPowerLab = (lab: PowerLabType) => {
+    if (lab === PowerLabType.SYMMETRICAL_FAULTS) {
+      setActivePowerBenchSim('symmetrical_faults');
+      setActiveTab(WorkspaceTab.BENCH);
+    } else if (lab === PowerLabType.TRANSIENTS_PROTECTION) {
+      setActivePowerBenchSim('transients_protection');
+      setActiveTab(WorkspaceTab.BENCH);
+    } else {
+      setActivePowerLab(lab);
+      setActiveTab(WorkspaceTab.LABS);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenPowerCalculator = (calcId?: string) => {
+    setPwrRequestedCalcId(calcId);
+    setActiveTab(WorkspaceTab.SOLVER);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenPowerTheory = (
+    subTab: 'principles' | 'timeline' | 'essays' = 'principles'
+  ) => {
+    setPwrTheorySubTab(subTab);
+    setActiveTab(WorkspaceTab.THEORY);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleStartCatQuiz = () => {
-    if (activeCourse === 'ece433') {
+    if (activeCourse === 'ece471') {
+      setPwrAutoStartQuiz('cat_sprint');
+    } else if (activeCourse === 'ece433') {
       setCtrlAutoStartQuiz('cat_sprint');
     } else {
       setAutoStartQuiz('cat_sprint');
@@ -541,12 +786,12 @@ export default function App() {
       />
 
       <main className="mx-auto w-full max-w-[1360px] flex-1 px-6 py-8 space-y-6">
-        {/* Dual-Course Switcher */}
+        {/* Multi-Course Switcher */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
           <div
             role="tablist"
             aria-label="Course Workspace Switcher"
-            className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-1"
+            className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1"
           >
             <button
               type="button"
@@ -574,10 +819,25 @@ export default function App() {
             >
               ECE 433 · Control System II (3 Units)
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeCourse === 'ece471'}
+              onClick={() => handleSwitchCourse('ece471')}
+              className={`cursor-pointer rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                activeCourse === 'ece471'
+                  ? 'bg-emerald-700 text-white'
+                  : 'text-slate-600 hover:text-slate-950'
+              }`}
+            >
+              ECE 471 · Electric Power Systems II (3 Units)
+            </button>
           </div>
 
           <div className="text-xs font-mono text-slate-500 tabular-nums">
-            {activeCourse === 'ece433'
+            {activeCourse === 'ece471'
+              ? `Mastered ${powerProgress.completedTopics.length}/${POWER_SYLLABUS_TOPICS.length} topics · ${powerProgress.quizAttempts.length} quizzes`
+              : activeCourse === 'ece433'
               ? `Mastered ${controlProgress.completedTopics.length}/${CONTROL_SYLLABUS_TOPICS.length} topics · ${controlProgress.quizAttempts.length} quizzes`
               : `Mastered ${progress.completedTopics.length}/${SYLLABUS_TOPICS.length} topics · ${progress.quizAttempts.length} quizzes`}
           </div>
@@ -648,7 +908,7 @@ export default function App() {
               />
             )}
           </>
-        ) : (
+        ) : activeCourse === 'ece433' ? (
           <>
             {activeTab === WorkspaceTab.SPRINT && (
               <ControlStudySprintView
@@ -702,13 +962,71 @@ export default function App() {
               />
             )}
           </>
+        ) : (
+          <>
+            {activeTab === WorkspaceTab.SPRINT && (
+              <PowerStudySprintView
+                progress={powerProgress}
+                onToggleTopic={handleTogglePowerTopic}
+                onOpenLab={handleOpenPowerLab}
+                onOpenCalculator={handleOpenPowerCalculator}
+                onOpenTheory={handleOpenPowerTheory}
+                onStartCatQuiz={handleStartCatQuiz}
+                onResolveQuizTopic={handleResolvePowerQuizTopic}
+                onResolveSolverAttempt={handleResolvePowerAttempt}
+              />
+            )}
+
+            {activeTab === WorkspaceTab.THEORY && (
+              <PowerTheoryView
+                initialSubTab={pwrTheorySubTab}
+                masteredEssays={powerProgress.masteredEssays}
+                onToggleMasteredEssay={handleToggleMasteredPowerEssay}
+                onRecordEssayFailure={handleRecordPowerFailure}
+                onOpenLab={handleOpenPowerLab}
+                onOpenCalculator={handleOpenPowerCalculator}
+              />
+            )}
+
+            {activeTab === WorkspaceTab.LABS && (
+              <PowerLabsView
+                activeLab={activePowerLab}
+                onSelectLab={setActivePowerLab}
+                onOpenTheory={handleOpenPowerTheory}
+              />
+            )}
+
+            {activeTab === WorkspaceTab.BENCH && (
+              <PowerBenchView initialSim={activePowerBenchSim} />
+            )}
+
+            {activeTab === WorkspaceTab.SOLVER && (
+              <PowerSolverView
+                initialCalcId={pwrRequestedCalcId}
+                masteredExamples={powerProgress.masteredExamples}
+                onToggleMastered={handleToggleMasteredPowerExample}
+                onRecordSolverFailure={handleRecordPowerFailure}
+              />
+            )}
+
+            {activeTab === WorkspaceTab.QUIZ && (
+              <PowerQuizView
+                autoStartMode={pwrAutoStartQuiz}
+                onClearAutoStart={() => setPwrAutoStartQuiz(null)}
+                attempts={powerProgress.quizAttempts}
+                onSaveAttempt={handleSavePowerQuizAttempt}
+              />
+            )}
+          </>
         )}
       </main>
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-4 px-6 py-4 text-xs text-slate-500">
           <span>
-            {activeCourse === 'ece433'
+            {activeCourse === 'ece471'
+              ? 'ECE 471 Electric Power Systems II (3 Units) · Interactive Study & Simulation Lab'
+              : activeCourse === 'ece433'
               ? 'ECE 433 Control System II (3 Units) · Interactive Study & Simulation Lab'
               : 'ECE 423 Digital Communication Systems · Interactive Study & Simulation Lab'}
           </span>

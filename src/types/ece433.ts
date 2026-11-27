@@ -1,4 +1,4 @@
-export type CourseId = 'ece423' | 'ece433';
+export type CourseId = 'ece423' | 'ece433' | 'ece471';
 
 export enum ControlModule {
   PID = 'pid',
